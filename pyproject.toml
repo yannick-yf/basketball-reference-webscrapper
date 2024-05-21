@@ -1,0 +1,47 @@
+[tool.poetry]
+name = "basketball-reference-webscrapper"
+version = "0.1.0"
+description = "Python package for Basketball Reference that gathers data by scraping the website"
+authors = ["Yannick Flores <yannick.flores1992@gmail.com>"]
+readme = "README.md"
+exclude = ["tests", "docs"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pandas = "2.*"
+numpy = "1.26.*"
+pytest = "*"
+pylint = "^2.15.10"
+beautifulsoup4 = "4.12.*"
+requests = "2.32.*"
+
+[tool.poetry.dev-dependencies]
+coverage = {extras = ["toml"], version = "6.5.*"}
+black = {version = "22.10.*", allow-prereleases = true}
+pytest = "7.2.*"
+pytest-html = "3.1.*"
+pytest-cov = "2.12.*"
+py = "1.11.*"
+pylint = "2.15.*"
+python-decouple = "3.6"
+mkdocs = "1.4.*"
+importlib-resources="6.0.1"
+
+# [tool.pytest.ini_options]
+# addopts = [
+#     "--import-mode=importlib",
+# ]
+
+[tool.pytest.ini_options]
+pythonpath = "basketball_reference_webscrapper"
+testpaths = "tests"
+addopts = [
+    "--import-mode=importlib",
+]
+
+[build-system]
+requires = ["poetry-core>=1.0.0", "hatchling"]
+build-backend = ["poetry.core.masonry.api", "hatchling.build"]
+
+[project]
+name = "basketball_reference_webscrapper"
