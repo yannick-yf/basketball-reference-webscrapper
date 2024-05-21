@@ -6,7 +6,7 @@ import requests
 import time
 import importlib_resources
 
-from utils.logs import get_logger
+from basketball_reference_webscrapper.utils.logs import get_logger
 
 logger = get_logger("WEB_SCRAPPING_EXECUTION", log_level="INFO")
 
@@ -29,8 +29,8 @@ class WebScrapBasketballReference:
         #------------------------------------------------------
         # Get team reference data 
         ref = (
-            importlib_resources.files("constants")
-            / "team_city_refdata.csv"
+            importlib_resources.files("basketball_reference_webscrapper")
+            / "constants/team_city_refdata.csv"
         )
         with importlib_resources.as_file(ref) as path:
             # Do something with path.  After the with-statement exits, any

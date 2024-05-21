@@ -27,21 +27,13 @@ python-decouple = "3.6"
 mkdocs = "1.4.*"
 importlib-resources="6.0.1"
 
-# [tool.pytest.ini_options]
-# addopts = [
-#     "--import-mode=importlib",
-# ]
-
 [tool.pytest.ini_options]
-pythonpath = "basketball_reference_webscrapper"
+pythonpath = "."
 testpaths = "tests"
 addopts = [
     "--import-mode=importlib",
 ]
 
 [build-system]
-requires = ["poetry-core>=1.0.0", "hatchling"]
-build-backend = ["poetry.core.masonry.api", "hatchling.build"]
-
-[project]
-name = "basketball_reference_webscrapper"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
