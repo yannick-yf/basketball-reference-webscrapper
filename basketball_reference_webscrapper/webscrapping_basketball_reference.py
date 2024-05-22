@@ -6,6 +6,7 @@ import requests
 import time
 import importlib_resources
 
+from basketball_reference_webscrapper.data_models.feature_model import FeatureIn, FeatureOut
 from basketball_reference_webscrapper.utils.logs import get_logger
 
 logger = get_logger("WEB_SCRAPPING_EXECUTION", log_level="INFO")
@@ -17,14 +18,20 @@ class WebScrapBasketballReference:
     """
 
     # init method or constructor
-    def __init__(self, url, season):
-        self.url = url
-        self.season = season
+    # def __init__(self, url, season):
+    #     self.url = url
+    #     self.season = season
+    
+    def __init__(self, feature_object: FeatureIn) -> None:
+        self.feature_object = feature_object
 
     def webscrappe_nba_games_data(self):
         """
         Webscrappe NBA games data
         """
+
+        self._get_data_type_validation()
+        self._get_season_validation()
         
         #------------------------------------------------------
         # Get team reference data 
@@ -55,9 +62,16 @@ class WebScrapBasketballReference:
                 f"Execution for {team}"
             )
             
+            url = "https://www.basketball-reference.com/teams/ATL/" +\
+                self.feature_object.data_type +\
+                "/" +\
+                str(self.feature_object.season) +\
+                "/gamelog/"
+            
             # url = f"https://www.basketball-reference.com/teams/{team}/{self.season}/gamelog/"
-            url = f"https://www.basketball-reference.com/teams/ATL/2022/gamelog/"
+            # url = f"https://www.basketball-reference.com/teams/ATL/2022/gamelog/"
 
+            print(url)
 
             if '200' in str(requests.get(url)):
 
@@ -104,6 +118,37 @@ class WebScrapBasketballReference:
             'pf_opp']]
 
         return games
+    
+
+    def _get_data_type_validation(self):
+        if self.feature_object.data_type is not None:
+            print(self.feature_object.data_type)
+            if str(self.feature_object.data_type) != 'gamelog':
+                raise ValueError(
+                    "data_type value provided is not supported by the package. Accepted values are: 'gamelog'\
+                    Read documentation for more details"
+                )
+        else:
+            raise ValueError(
+                    "data_type is a required argument. it accepts the following values: 'gamelog'.\
+                    Read documentation for more details"
+                )
+    
+    def _get_season_validation(self):
+        if self.feature_object.season is not None:
+            if (
+                self.feature_object.season > 1999
+            ):
+                raise ValueError(
+                    "season value provided is a year not supported by the package. \
+                    it should be between 2000 and current NBA season."
+                )
+        else:
+            raise ValueError(
+                    "season is a required argument. it should be between 2000 and current NBA season."
+                )
+    
+
     
 if __name__ == "__main__":
     webscrapping_class = WebScrapBasketballReference(
