@@ -12,13 +12,18 @@ class TestWebScrapBasketballReference(TestCase):
         self.n_informative=5
         self.random_state=42
 
-    def test_webscrappe_nba_games_data():
-        webscrapping_class = WebScrapBasketballReference(
-            data_type = "gamelog",
-            season = 2022
-        )
+    def test_webscrappe_nba_games_data(self):
+        """
+        GIVEN a WebScrapBasketballReference object with right arguments
+        WHEN the webscrappe_nba_games_data method is called
+        THEN it returns a valid results
+        """
 
-        nba_games = webscrapping_class.webscrappe_nba_games_data()
+        nba_games = WebScrapBasketballReference(
+                FeatureIn(
+                    data_type = "gamelog",
+                    season = 2022)
+            ).webscrappe_nba_games_data()
 
         assert len(nba_games) > 0
 
@@ -34,5 +39,33 @@ class TestWebScrapBasketballReference(TestCase):
                 FeatureIn(
                     data_type = "data_science",
                     season = 2022)
+            ).webscrappe_nba_games_data()
+
+    def test_webscrappe_nba_games_data_w_wrong_season(self):
+        """
+        GIVEN a WebScrapBasketballReference object using a string as season variable
+        WHEN the webscrappe_nba_games_data method is called
+        THEN return an error that the season used is not at the accepted format
+        """
+
+        with self.assertRaises(ValueError):
+            WebScrapBasketballReference(
+                FeatureIn(
+                    data_type = "data_science",
+                    season = "1234")
+            ).webscrappe_nba_games_data()
+
+    def test_webscrappe_nba_games_data_w_non_supported_season(self):
+        """
+        GIVEN a WebScrapBasketballReference object using a NBA season before 2000
+        WHEN the webscrappe_nba_games_data method is called
+        THEN return an error that the season used is before 2000
+        """
+
+        with self.assertRaises(ValueError):
+            WebScrapBasketballReference(
+                FeatureIn(
+                    data_type = "data_science",
+                    season = 1999)
             ).webscrappe_nba_games_data()
 

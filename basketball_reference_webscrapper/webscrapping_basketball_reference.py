@@ -16,11 +16,6 @@ class WebScrapBasketballReference:
     """
     Class that take as inputs url and season and return all games teams stats
     """
-
-    # init method or constructor
-    # def __init__(self, url, season):
-    #     self.url = url
-    #     self.season = season
     
     def __init__(self, feature_object: FeatureIn) -> None:
         self.feature_object = feature_object
@@ -40,8 +35,6 @@ class WebScrapBasketballReference:
             / "constants/team_city_refdata.csv"
         )
         with importlib_resources.as_file(ref) as path:
-            # Do something with path.  After the with-statement exits, any
-            # temporary file created will be immediately cleaned up.
             team_city_refdata = pd.read_csv(path, sep = ';')
 
         #------------------------------------------------------
@@ -63,20 +56,13 @@ class WebScrapBasketballReference:
             )
             
             url = "https://www.basketball-reference.com/teams/ATL/" +\
-                self.feature_object.data_type +\
-                "/" +\
                 str(self.feature_object.season) +\
-                "/gamelog/"
-            
-            # url = f"https://www.basketball-reference.com/teams/{team}/{self.season}/gamelog/"
-            # url = f"https://www.basketball-reference.com/teams/ATL/2022/gamelog/"
-
-            print(url)
+                "/"+\
+                self.feature_object.data_type
 
             if '200' in str(requests.get(url)):
 
                 # collect HTML data and create beautiful soup object:
-                # collect HTML data
                 html = urlopen(url)
                         
                 # create beautiful soup object from HTML
@@ -102,7 +88,7 @@ class WebScrapBasketballReference:
 
                     games_tmp.columns =  cols
                     games_tmp = games_tmp.dropna()
-                    games_tmp['id_season'] = self.season
+                    games_tmp['id_season'] = self.feature_object.season
                     games_tmp['tm'] = team
                     games = pd.concat([games, games_tmp], axis=0)
             
@@ -135,9 +121,9 @@ class WebScrapBasketballReference:
                 )
     
     def _get_season_validation(self):
-        if self.feature_object.season is not None:
+        if isinstance(self.feature_object.season, int):
             if (
-                self.feature_object.season > 1999
+                self.feature_object.season < 1999
             ):
                 raise ValueError(
                     "season value provided is a year not supported by the package. \
@@ -145,7 +131,7 @@ class WebScrapBasketballReference:
                 )
         else:
             raise ValueError(
-                    "season is a required argument. it should be between 2000 and current NBA season."
+                    "season is a required argument and should be an int value between 2000 and current NBA season."
                 )
     
 
