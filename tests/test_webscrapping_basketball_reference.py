@@ -28,6 +28,23 @@ class TestWebScrapBasketballReference(TestCase):
 
         assert len(nba_games) > 0
 
+    def test_webscrappe_nba_games_data_schedule(self):
+        """
+        GIVEN a WebScrapBasketballReference object with right arguments 
+            and a list of two teams for the argument team
+        WHEN the webscrappe_nba_games_data method is called
+        THEN it returns a valid results
+        """
+
+        nba_games = WebScrapBasketballReference(
+                FeatureIn(
+                    data_type = "schedule",
+                    season = 2022,
+                    team = 'BOS')
+            ).webscrappe_nba_games_data()
+
+        assert len(nba_games) > 0
+
     def test_webscrappe_nba_games_data_with_two_teams_list_arg(self):
         """
         GIVEN a WebScrapBasketballReference object with right arguments 

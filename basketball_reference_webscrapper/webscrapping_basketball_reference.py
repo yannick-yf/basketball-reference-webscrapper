@@ -85,11 +85,18 @@ class WebScrapBasketballReference:
                 f"Execution for {team}"
             )
             
-            url = "https://www.basketball-reference.com/teams/" +\
-                team + "/" +\
-                str(self.feature_object.season) +\
-                "/"+\
-                self.feature_object.data_type
+            if self.feature_object.data_type == 'gamelog':
+                url = "https://www.basketball-reference.com/teams/" +\
+                    team + "/" +\
+                    str(self.feature_object.season) +\
+                    "/"+\
+                    self.feature_object.data_type
+            else:
+                url = "https://www.basketball-reference.com/teams/ATL/2022_games.html"
+
+            # url = f'https://www.basketball-reference.com/players/{player_id}/gamelog/{id_season}'
+            # url = f"https://www.basketball-reference.com/teams/{team}/{SEASON}.html"
+            # # url = f"https://www.basketball-reference.com/teams/BRK/2001.html"
 
             if '200' in str(requests.get(url)):
 
@@ -99,7 +106,11 @@ class WebScrapBasketballReference:
                 # create beautiful soup object from HTML
                 soup = BeautifulSoup(html, "html.parser")
 
-                rows = soup.findAll('tr')[2:]
+
+                if self.feature_object.data_type == 'gamelog':
+                    rows = soup.findAll('tr')[2:]
+                else:
+                    rows = soup.findAll('tr')[1:]
 
                 rows_data = [[td.getText() for td in rows[i].findAll('td')]
                                     for i in range(len(rows))]
@@ -107,7 +118,9 @@ class WebScrapBasketballReference:
                 if len(rows_data) != 0:
                     # create the dataframe
                     games_tmp = pd.DataFrame(rows_data)
-                    cols = ["game_nb", "game_date", "extdom", "opp", "results",
+
+                    if self.feature_object.data_type == 'gamelog':
+                        cols = ["game_nb", "game_date", "extdom", "opp", "results",
                             "pts_tm","pts_opp",
                             "fg_tm", "fga_tm","fg_prct_tm",
                             "3p_tm","3pa_tm", "3p_prct_tm","ft_tm","fta_tm","ft_prct_tm",
@@ -116,7 +129,9 @@ class WebScrapBasketballReference:
                             "fg_opp","fga_opp","fg_prct_opp",
                             "3p_opp", "3pa_opp", "3p_prct_opp", "ft_opp", "fta_opp","ft_prct_opp",
                             "orb_opp", "trb_opp","ast_opp", "stl_opp", "blk_opp","tov_opp", "pf_opp"]
-
+                    else:
+                        cols = ['game_date', 'time_start', 'nc1', 'nc2', 'extdom', 'opponent', 'w_l', 'overtime', 'pts_tm', 'pts_opp', 'w_tot', 'l_tot', 'streak_w_l', 'nc3']
+                    
                     games_tmp.columns =  cols
                     games_tmp = games_tmp.dropna()
                     games_tmp['id_season'] = self.feature_object.season
@@ -125,29 +140,33 @@ class WebScrapBasketballReference:
             
             time.sleep(5)
 
-        games = games[[
-            'id_season', 'game_nb', 'game_date', 'extdom', 'tm','opp', 'results', 'pts_tm', 'pts_opp',
-            'fg_tm', 'fga_tm', 'fg_prct_tm', '3p_tm', '3pa_tm', '3p_prct_tm',
-            'ft_tm', 'fta_tm', 'ft_prct_tm', 'orb_tm', 'trb_tm', 'ast_tm', 'stl_tm',
-            'blk_tm', 'tov_tm', 'pf_tm', 'fg_opp', 'fga_opp', 'fg_prct_opp',
-            '3p_opp', '3pa_opp', '3p_prct_opp', 'ft_opp', 'fta_opp', 'ft_prct_opp',
-            'orb_opp', 'trb_opp', 'ast_opp', 'stl_opp', 'blk_opp', 'tov_opp',
-            'pf_opp']]
-
+        if self.feature_object.data_type == 'gamelog':
+            games = games[[
+                'id_season', 'game_nb', 'game_date', 'extdom', 'tm','opp', 'results', 'pts_tm', 'pts_opp',
+                'fg_tm', 'fga_tm', 'fg_prct_tm', '3p_tm', '3pa_tm', '3p_prct_tm',
+                'ft_tm', 'fta_tm', 'ft_prct_tm', 'orb_tm', 'trb_tm', 'ast_tm', 'stl_tm',
+                'blk_tm', 'tov_tm', 'pf_tm', 'fg_opp', 'fga_opp', 'fg_prct_opp',
+                '3p_opp', '3pa_opp', '3p_prct_opp', 'ft_opp', 'fta_opp', 'ft_prct_opp',
+                'orb_opp', 'trb_opp', 'ast_opp', 'stl_opp', 'blk_opp', 'tov_opp',
+                'pf_opp']]
+        else:
+            games = games[['id_season', 'tm', 'game_date', 'time_start', 'extdom', 'opponent', 'w_l', 'overtime', 'pts_tm', 'pts_opp', 'w_tot', 'l_tot', 'streak_w_l']]
+            
         return games
     
 
     def _get_data_type_validation(self):
         if self.feature_object.data_type is not None:
-            print(self.feature_object.data_type)
-            if str(self.feature_object.data_type) != 'gamelog':
+            if str(self.feature_object.data_type) not in ['gamelog', 'schedule']:
                 raise ValueError(
-                    "data_type value provided is not supported by the package. Accepted values are: 'gamelog'\
+                    "data_type value provided is not supported by the package.\
+                    Accepted values are: 'gamelog', 'schedule'.\
                     Read documentation for more details"
                 )
         else:
             raise ValueError(
-                    "data_type is a required argument. it accepts the following values: 'gamelog'.\
+                    "data_type is a required argument.\
+                    Accepted values are: 'gamelog', 'schedule'.\
                     Read documentation for more details"
                 )
     
