@@ -47,9 +47,6 @@ class WebScrapBasketballReference:
         Webscrappe NBA games data
         """
 
-        self._get_data_type_validation()
-        self._get_season_validation()
-
         #------------------------------------------------------
         # Get team reference data 
         ref = (
@@ -59,8 +56,14 @@ class WebScrapBasketballReference:
         with importlib_resources.as_file(ref) as path:
             team_city_refdata = pd.read_csv(path, sep = ';')
 
+        #------------------------------------------------------
+        # User Input check and validation
+        self._get_data_type_validation()
+        self._get_season_validation()
         self._get_team_list_values_validation(list(team_city_refdata['team_abrev']))
 
+        #------------------------------------------------------
+        # Team filtering
         if isinstance(self.feature_object.team, list):
             team_city_refdata = team_city_refdata[team_city_refdata['team_abrev'].isin(self.feature_object.team)]
         elif isinstance(self.feature_object.team, str):
@@ -73,7 +76,6 @@ class WebScrapBasketballReference:
 
         #------------------------------------------------------
         # For Loop Throught all the team abrev for the given season
-
         for index, row in team_city_refdata.iterrows():
 
             # URL to scrape
@@ -83,7 +85,8 @@ class WebScrapBasketballReference:
                 f"Execution for {team}"
             )
             
-            url = "https://www.basketball-reference.com/teams/ATL/" +\
+            url = "https://www.basketball-reference.com/teams/" +\
+                team + "/" +\
                 str(self.feature_object.season) +\
                 "/"+\
                 self.feature_object.data_type
