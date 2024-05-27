@@ -19,6 +19,28 @@ class WebScrapBasketballReference:
     
     def __init__(self, feature_object: FeatureIn) -> None:
         self.feature_object = feature_object
+    
+    def _get_team_list_values_validation(self, team_abbrev_list: list):
+        if  (isinstance(self.feature_object.team, list)) and (all(isinstance(s, str) for s in self.feature_object.team)):
+            if set(self.feature_object.team).issubset(team_abbrev_list)==False:
+                raise ValueError(
+                    "team list arg provided is not accepted.\
+                    Value needs to be 'all' or a NBA team abbreviation such as BOS for Boston Celtics.\
+                    More details on all values possible in the GitHub Repo docs"
+                )
+        elif isinstance(self.feature_object.team, str):
+            if (self.feature_object.team != 'all') and (self.feature_object.team not in team_abbrev_list):
+                raise ValueError(
+                    "team arg provided is not accepted.\
+                    Value needs to be 'all' or a NBA team abbreviation such as BOS for Boston Celtics.\
+                    More details on all values possible in the GitHub Repo docs"
+                )
+        else:
+            raise ValueError(
+                    "team args should be a string or a list of string.\
+                    Value needs to be NBA team abbreviation such as BOS for Boston Celtics.\
+                    More details on all values possible in the GitHub Repo docs"
+                )
 
     def webscrappe_nba_games_data(self):
         """
@@ -27,7 +49,7 @@ class WebScrapBasketballReference:
 
         self._get_data_type_validation()
         self._get_season_validation()
-        
+
         #------------------------------------------------------
         # Get team reference data 
         ref = (
@@ -37,14 +59,20 @@ class WebScrapBasketballReference:
         with importlib_resources.as_file(ref) as path:
             team_city_refdata = pd.read_csv(path, sep = ';')
 
+        self._get_team_list_values_validation(list(team_city_refdata['team_abrev']))
+
+        if isinstance(self.feature_object.team, list):
+            team_city_refdata = team_city_refdata[team_city_refdata['team_abrev'].isin(self.feature_object.team)]
+        elif isinstance(self.feature_object.team, str):
+            if self.feature_object.team != 'all':
+                team_city_refdata = team_city_refdata[team_city_refdata['team_abrev'] == self.feature_object.team]
+        
         #------------------------------------------------------
         # Initialization of the dataframe to fill-in
         games = pd.DataFrame()
 
         #------------------------------------------------------
         # For Loop Throught all the team abrev for the given season
-
-        team_city_refdata = team_city_refdata.head(2)
 
         for index, row in team_city_refdata.iterrows():
 

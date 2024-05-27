@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 class FeatureIn(BaseModel):
     data_type: str = None
     season: int = None
+    team: Union[List[str], str] = 'all'
 
 class FeatureOut(BaseModel):
     column_names: list
