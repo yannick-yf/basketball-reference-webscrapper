@@ -1,16 +1,19 @@
 """Test WebScrapBasketballReference"""
 
 from unittest import TestCase
-from basketball_reference_webscrapper.webscrapping_basketball_reference import WebScrapBasketballReference
+from basketball_reference_webscrapper.webscrapping_basketball_reference import (
+    WebScrapBasketballReference,
+)
 from basketball_reference_webscrapper.data_models.feature_model import FeatureIn
+
 
 class TestWebScrapBasketballReference(TestCase):
     def setUp(self) -> None:
         self.n_samples = 500
-        self.n_features=20
-        self.noise=0.1
-        self.n_informative=5
-        self.random_state=42
+        self.n_features = 20
+        self.noise = 0.1
+        self.n_informative = 5
+        self.random_state = 42
 
     def test_webscrappe_nba_games_data(self):
         """
@@ -21,27 +24,50 @@ class TestWebScrapBasketballReference(TestCase):
         """
 
         nba_games = WebScrapBasketballReference(
-                FeatureIn(
-                    data_type = "gamelog",
-                    season = 2022)
-            ).webscrappe_nba_games_data()
+            FeatureIn(data_type="gamelog", season=2022)
+        ).webscrappe_nba_games_data()
 
         assert len(nba_games) > 0
 
-    def test_webscrappe_nba_games_data_with_two_teams_list_arg(self):
+    def test_webscrappe_nba_games_data_schedule(self):
         """
-        GIVEN a WebScrapBasketballReference object with right arguments 
+        GIVEN a WebScrapBasketballReference object with right arguments
             and a list of two teams for the argument team
         WHEN the webscrappe_nba_games_data method is called
         THEN it returns a valid results
         """
 
         nba_games = WebScrapBasketballReference(
-                FeatureIn(
-                    data_type = "gamelog",
-                    season = 2022,
-                    team = ['BOS', 'LAL'])
-            ).webscrappe_nba_games_data()
+            FeatureIn(data_type="schedule", season=2022, team="BOS")
+        ).webscrappe_nba_games_data()
+
+        assert len(nba_games) > 0
+
+    def test_webscrappe_nba_games_data_schedule_two_teams_list_arg(self):
+        """
+        GIVEN a WebScrapBasketballReference object with right arguments
+            and a list of two teams for the argument team
+        WHEN the webscrappe_nba_games_data method is called
+        THEN it returns a valid results
+        """
+
+        nba_games = WebScrapBasketballReference(
+            FeatureIn(data_type="schedule", season=2010, team=["BOS", "DAL"])
+        ).webscrappe_nba_games_data()
+
+        assert len(nba_games) > 0
+
+    def test_webscrappe_nba_games_data_with_two_teams_list_arg(self):
+        """
+        GIVEN a WebScrapBasketballReference object with right arguments
+            and a list of two teams for the argument team
+        WHEN the webscrappe_nba_games_data method is called
+        THEN it returns a valid results
+        """
+
+        nba_games = WebScrapBasketballReference(
+            FeatureIn(data_type="gamelog", season=2022, team=["BOS", "LAL"])
+        ).webscrappe_nba_games_data()
 
         assert len(nba_games) > 0
 
@@ -54,11 +80,8 @@ class TestWebScrapBasketballReference(TestCase):
         """
 
         nba_games = WebScrapBasketballReference(
-                FeatureIn(
-                    data_type = "gamelog",
-                    season = 2022,
-                    team = 'BOS')
-            ).webscrappe_nba_games_data()
+            FeatureIn(data_type="gamelog", season=2022, team="BOS")
+        ).webscrappe_nba_games_data()
 
         assert len(nba_games) > 0
 
@@ -71,10 +94,7 @@ class TestWebScrapBasketballReference(TestCase):
 
         with self.assertRaises(ValueError):
             WebScrapBasketballReference(
-                FeatureIn(
-                    data_type = "gamelog",
-                    season = 2022,
-                    team='TOTO')
+                FeatureIn(data_type="gamelog", season=2022, team="TOTO")
             ).webscrappe_nba_games_data()
 
     def test_webscrappe_nba_games_data_w_wrong_team_list_value(self):
@@ -86,10 +106,7 @@ class TestWebScrapBasketballReference(TestCase):
 
         with self.assertRaises(ValueError):
             WebScrapBasketballReference(
-                FeatureIn(
-                    data_type = "gamelog",
-                    season = 2022,
-                    team=['TOTO', 'ATL'])
+                FeatureIn(data_type="gamelog", season=2022, team=["TOTO", "ATL"])
             ).webscrappe_nba_games_data()
 
     def test_webscrappe_nba_games_data_w_wrong_data_type(self):
@@ -101,9 +118,7 @@ class TestWebScrapBasketballReference(TestCase):
 
         with self.assertRaises(ValueError):
             WebScrapBasketballReference(
-                FeatureIn(
-                    data_type = "data_science",
-                    season = 2022)
+                FeatureIn(data_type="data_science", season=2022)
             ).webscrappe_nba_games_data()
 
     def test_webscrappe_nba_games_data_w_wrong_season(self):
@@ -115,9 +130,7 @@ class TestWebScrapBasketballReference(TestCase):
 
         with self.assertRaises(ValueError):
             WebScrapBasketballReference(
-                FeatureIn(
-                    data_type = "gamelog",
-                    season = "1234")
+                FeatureIn(data_type="gamelog", season="1234")
             ).webscrappe_nba_games_data()
 
     def test_webscrappe_nba_games_data_w_non_supported_season(self):
@@ -129,8 +142,5 @@ class TestWebScrapBasketballReference(TestCase):
 
         with self.assertRaises(ValueError):
             WebScrapBasketballReference(
-                FeatureIn(
-                    data_type = "gamelog",
-                    season = 1998)
+                FeatureIn(data_type="gamelog", season=1998)
             ).webscrappe_nba_games_data()
-

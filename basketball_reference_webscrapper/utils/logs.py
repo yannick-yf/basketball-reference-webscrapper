@@ -1,7 +1,7 @@
 """Provides functions to create loggers."""
 
 import logging
-from typing import Text, Union
+from typing import Union
 import sys
 
 
@@ -21,7 +21,7 @@ def get_console_handler() -> logging.StreamHandler:
 
 
 def get_logger(
-    name: Text = __name__, log_level: Union[Text, int] = logging.DEBUG
+    name: str = __name__, log_level: Union[str, int] = logging.DEBUG
 ) -> logging.Logger:
     """Get logger.
     Args:
