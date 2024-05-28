@@ -1,6 +1,6 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
+# another tuto to test and try: https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
 # name: Worklfo for ipfy asset management pdf to table
 
 name: Publish Python 🐍 distributions 📦 to PyPI and TestPyPI
