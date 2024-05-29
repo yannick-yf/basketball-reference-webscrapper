@@ -117,3 +117,27 @@ schedule:
     - w_tot
     - l_tot
     - streak_w_l
+
+player_attributes:
+  url: https://www.basketball-reference.com/teams/
+  beautifulsoup_tr_index: 0
+  list_columns:
+    - Name
+    - Position
+    - Ht
+    - Wt
+    - BirthDate
+    - Nationality
+    - Experience
+    - College
+  list_columns_to_select:
+    - id_season
+    - tm
+    - Name
+    - Position
+    - Ht
+    - Wt
+    - BirthDate
+    - Nationality
+    - Experience
+    - College

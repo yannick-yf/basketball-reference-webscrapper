@@ -79,7 +79,7 @@ class WebScrapBasketballReference:
 
         # ------------------------------------------------------
         # Initialization of the dataframe to fill-in
-        games = pd.DataFrame()
+        basketbal_reference_data = pd.DataFrame()
 
         # ------------------------------------------------------
         # For Loop Throught all the team abrev for the given season
@@ -99,7 +99,7 @@ class WebScrapBasketballReference:
                     + "/"
                     + self.feature_object.data_type
                 )
-            else:
+            elif self.feature_object.data_type == "schedule":
                 url = (
                     config[self.feature_object.data_type]["url"]
                     + team
@@ -107,23 +107,32 @@ class WebScrapBasketballReference:
                     + str(self.feature_object.season)
                     + "_games.html"
                 )
+            elif self.feature_object.data_type == "player_attributes":
+                url = (
+                    config[self.feature_object.data_type]["url"]
+                    + team
+                    + "/"
+                    + str(self.feature_object.season)
+                    + ".html"
+                )
 
             # url = f'https://www.basketball-reference.com/players/{player_id}/gamelog/{id_season}'
-            # url = f"https://www.basketball-reference.com/teams/{team}/{SEASON}.html"
-            # url = f"https://www.basketball-reference.com/teams/BRK/2001.html"
 
             if "200" in str(requests.get(url, timeout=60)):
+                
                 # collect HTML data and create beautiful soup object:
-                # html = urlopen(url)
-
                 with urlopen(url) as html:
 
                     # create beautiful soup object from HTML
                     soup = BeautifulSoup(html, "html.parser")
 
-                    rows = soup.findAll("tr")[
-                        config[self.feature_object.data_type]["beautifulsoup_tr_index"] :
-                    ]
+                    if self.feature_object.data_type == 'player_attributes':
+                        rows = soup.findAll('table')[config[self.feature_object.data_type]["beautifulsoup_tr_index"]]
+                        rows = rows.find_all('tr')
+                    else:
+                        rows = soup.findAll("tr")[
+                            config[self.feature_object.data_type]["beautifulsoup_tr_index"] :
+                        ]
 
                     rows_data = [
                         [td.getText() for td in rows[i].findAll("td")]
@@ -132,22 +141,22 @@ class WebScrapBasketballReference:
 
                     if len(rows_data) != 0:
 
-                        games_tmp = pd.DataFrame(rows_data)
-                        games_tmp.columns = config[self.feature_object.data_type]["list_columns"]
-                        games_tmp = games_tmp.dropna()
-                        games_tmp.loc[:, "id_season"] = self.feature_object.season
-                        games_tmp.loc[:, "tm"] = team
-                        games = pd.concat([games, games_tmp], axis=0)
+                        basketbal_reference_data_tmp = pd.DataFrame(rows_data)
+                        basketbal_reference_data_tmp.columns = config[self.feature_object.data_type]["list_columns"]
+                        basketbal_reference_data_tmp = basketbal_reference_data_tmp.dropna()
+                        basketbal_reference_data_tmp.loc[:, "id_season"] = self.feature_object.season
+                        basketbal_reference_data_tmp.loc[:, "tm"] = team
+                        basketbal_reference_data = pd.concat([basketbal_reference_data, basketbal_reference_data_tmp], axis=0)
 
             time.sleep(5)
 
-        games = games[config[self.feature_object.data_type]["list_columns_to_select"]]
+        basketbal_reference_data = basketbal_reference_data[config[self.feature_object.data_type]["list_columns_to_select"]]
 
-        return games
+        return basketbal_reference_data
 
     def _get_data_type_validation(self):
         if self.feature_object.data_type is not None:
-            if str(self.feature_object.data_type) not in ["gamelog", "schedule"]:
+            if str(self.feature_object.data_type) not in ["gamelog", "schedule", "player_attributes"]:
                 raise ValueError(
                     "data_type value provided is not supported by the package.\
                     Accepted values are: 'gamelog', 'schedule'.\
@@ -156,7 +165,7 @@ class WebScrapBasketballReference:
         else:
             raise ValueError(
                 "data_type is a required argument.\
-                    Accepted values are: 'gamelog', 'schedule'.\
+                    Accepted values are: 'gamelog', 'schedule', 'player_attributes'.\
                     Read documentation for more details"
             )
 

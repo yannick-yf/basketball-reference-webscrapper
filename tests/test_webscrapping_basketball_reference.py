@@ -29,6 +29,21 @@ class TestWebScrapBasketballReference(TestCase):
 
         assert len(nba_games) > 0
 
+    def test_webscrappe_nba_player_attributes(self):
+        """
+        GIVEN a WebScrapBasketballReference object with right arguments
+            with team args with only one team
+            with data_type
+        WHEN the webscrappe_nba_games_data method is called
+        THEN it returns a valid results
+        """
+
+        nba_games = WebScrapBasketballReference(
+            FeatureIn(data_type="player_attributes", season=2010, team="BOS")
+        ).webscrappe_nba_games_data()
+
+        assert len(nba_games) > 0
+
     def test_webscrappe_nba_games_data_schedule(self):
         """
         GIVEN a WebScrapBasketballReference object with right arguments
