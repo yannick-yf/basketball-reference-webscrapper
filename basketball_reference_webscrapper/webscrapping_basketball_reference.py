@@ -44,8 +44,13 @@ class WebScrapBasketballReference:
 
         # ------------------------------------------------------
         # Import params file
-        with open("basketball_reference_webscrapper/params.yaml", encoding="utf-8") as conf_file:
-            config = yaml.safe_load(conf_file)
+        ref = (
+            importlib_resources.files("basketball_reference_webscrapper")
+            / "params.yaml"
+        )
+        with importlib_resources.as_file(ref) as path:
+            with open(path, encoding="utf-8") as conf_file:
+                config = yaml.safe_load(conf_file)
 
         # ------------------------------------------------------
         # Get team reference data
