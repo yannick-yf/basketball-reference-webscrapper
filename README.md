@@ -1,22 +1,20 @@
-# WebScrapBasketballReference
+# basketball-reference-webscrapper
 
-WebScrapBasketballReference is a Python package designed to scrape NBA games data from the Basketball Reference website. By providing a URL and a season, the package returns all games' team stats for that season.
+basketball-reference-webscrapper is a Python package designed to web scrape NBA games data from the Basketball Reference website.
 
 ## Features
 
-- Scrapes NBA gamelogs, schedules, and player attributes.
+- Web scrapes NBA gamelogs, schedules, and player attributes.
 - Validates user inputs to ensure data accuracy.
 - Handles team-specific data filtering.
 - Collects and processes data into a pandas DataFrame.
 
 ## Installation
 
-To install WebScrapBasketballReference, clone the repository and install the required dependencies:
+To install  basketball-reference-webscrapper, clone the repository and install the required dependencies:
 
 ```bash
-git clone https://github.com/yourusername/WebScrapBasketballReference.git
-cd WebScrapBasketballReference
-pip install -r requirements.txt
+pip install basketball-reference-webscrapper
 ```
 
 ## Usage
@@ -57,11 +55,7 @@ The package performs several input validations:
 
 ## Configuration
 
-The package uses a `params.yaml` file to store URL patterns and other configurations. Ensure this file is correctly set up in the `basketball_reference_webscrapper` directory.
-
-## Logging
-
-Logging is configured to provide information about the scraping execution. Logs can be viewed to monitor the process and debug if necessary.
+The package uses a `params.yaml` file to store URL patterns and other configurations.
 
 ## Example
 
@@ -84,14 +78,12 @@ scraper = WebScrapBasketballReference(feature_object)
 data = scraper.webscrappe_nba_games_data()
 
 # Display the data
-print(data)
+print(data.head())
 ```
 
 ## Contributing
 
 Contributions are welcome! Please submit a pull request or create an issue to report bugs or request features.
-
-## License
 
 ## Contact
 
