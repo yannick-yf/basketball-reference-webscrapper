@@ -103,6 +103,8 @@ schedule:
     - l_tot
     - streak_w_l
     - nc3
+    - log
+    - notes
   list_columns_to_select:
     - id_season
     - tm
