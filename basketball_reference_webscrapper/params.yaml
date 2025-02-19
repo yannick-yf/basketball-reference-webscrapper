@@ -9,33 +9,42 @@ gamelog:
     - results
     - pts_tm
     - pts_opp
+    - overtime
     - fg_tm
     - fga_tm
     - fg_prct_tm
     - 3p_tm
     - 3pa_tm
     - 3p_prct_tm
+    - 2p_tm
+    - 2pa_tm
+    - 2p_prct_tm
+    - efg_ptct_tm
     - ft_tm
     - fta_tm
     - ft_prct_tm
     - orb_tm
+    - drb_tm
     - trb_tm
     - ast_tm
     - stl_tm
-    - blk_tm 
+    - blk_tm
     - tov_tm
     - pf_tm
-    - nc
     - fg_opp
     - fga_opp
     - fg_prct_opp
     - 3p_opp
     - 3pa_opp
     - 3p_prct_opp
+    - 2p_opp
+    - 2pa_opp
+    - efg_ptct_opp
     - ft_opp
     - fta_opp
     - ft_prct_opp
     - orb_opp
+    - drb_opp
     - trb_opp
     - ast_opp
     - stl_opp
