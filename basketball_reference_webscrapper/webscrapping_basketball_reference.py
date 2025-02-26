@@ -118,6 +118,7 @@ class WebScrapBasketballReference:
 
             # url = f'https://www.basketball-reference.com/players/{player_id}/gamelog/{id_season}'
 
+
             if "200" in str(requests.get(url, timeout=60)):
                 
                 # collect HTML data and create beautiful soup object:
