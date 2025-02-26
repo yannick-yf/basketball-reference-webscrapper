@@ -149,7 +149,7 @@ class WebScrapBasketballReference:
                         basketbal_reference_data_tmp.loc[:, "tm"] = team
                         basketbal_reference_data = pd.concat([basketbal_reference_data, basketbal_reference_data_tmp], axis=0)
 
-            time.sleep(5)
+            time.sleep(20)
 
         basketbal_reference_data = basketbal_reference_data[config[self.feature_object.data_type]["list_columns_to_select"]]
 

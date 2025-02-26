@@ -24,7 +24,7 @@ class TestWebScrapBasketballReference(TestCase):
         """
 
         nba_games = WebScrapBasketballReference(
-            FeatureIn(data_type="gamelog", season=2022)
+            FeatureIn(data_type="gamelog", season=2018)
         ).webscrappe_nba_games_data()
 
         assert len(nba_games) > 0
