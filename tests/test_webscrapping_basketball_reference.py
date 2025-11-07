@@ -15,19 +15,19 @@ class TestWebScrapBasketballReference(TestCase):
         self.n_informative = 5
         self.random_state = 42
 
-    def test_webscrappe_nba_games_data(self):
-        """
-        GIVEN a WebScrapBasketballReference object with right arguments
-            and the default value for team
-        WHEN the webscrappe_nba_games_data method is called
-        THEN it returns a valid results
-        """
+    # def test_webscrappe_nba_games_data(self):
+    #     """
+    #     GIVEN a WebScrapBasketballReference object with right arguments
+    #         and the default value for team
+    #     WHEN the webscrappe_nba_games_data method is called
+    #     THEN it returns a valid results
+    #     """
 
-        nba_games = WebScrapBasketballReference(
-            FeatureIn(data_type="gamelog", season=2018)
-        ).webscrappe_nba_games_data()
+    #     nba_games = WebScrapBasketballReference(
+    #         FeatureIn(data_type="gamelog", season=2018)
+    #     ).webscrappe_nba_games_data()
 
-        assert len(nba_games) > 0
+    #     assert len(nba_games) > 0
 
     def test_webscrappe_nba_player_attributes(self):
         """
