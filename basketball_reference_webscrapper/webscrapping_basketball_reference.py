@@ -116,38 +116,76 @@ class WebScrapBasketballReference:
                     + ".html"
                 )
 
-            # url = f'https://www.basketball-reference.com/players/{player_id}/gamelog/{id_season}'
-
-
-            if "200" in str(requests.get(url, timeout=60)):
+            try:
+                response = requests.get(url, timeout=60)
+                logger.info(f"Team {team}: Status Code = {response.status_code}")
                 
-                # collect HTML data and create beautiful soup object:
-                with urlopen(url) as html:
+                if response.status_code == 200:
+                    # ... scraping code ...
+                    # collect HTML data and create beautiful soup object:
+                    with urlopen(url) as html:
 
-                    # create beautiful soup object from HTML
-                    soup = BeautifulSoup(html, "html.parser")
+                        # create beautiful soup object from HTML
+                        soup = BeautifulSoup(html, "html.parser")
 
-                    if self.feature_object.data_type == 'player_attributes':
-                        rows = soup.findAll('table')[config[self.feature_object.data_type]["beautifulsoup_tr_index"]]
-                        rows = rows.find_all('tr')
-                    else:
-                        rows = soup.findAll("tr")[
-                            config[self.feature_object.data_type]["beautifulsoup_tr_index"] :
+                        if self.feature_object.data_type == 'player_attributes':
+                            rows = soup.findAll('table')[config[self.feature_object.data_type]["beautifulsoup_tr_index"]]
+                            rows = rows.find_all('tr')
+                        else:
+                            rows = soup.findAll("tr")[
+                                config[self.feature_object.data_type]["beautifulsoup_tr_index"] :
+                            ]
+
+                        rows_data = [
+                            [td.getText() for td in rows[i].findAll("td")]
+                            for i in range(len(rows))
                         ]
 
-                    rows_data = [
-                        [td.getText() for td in rows[i].findAll("td")]
-                        for i in range(len(rows))
-                    ]
+                        if len(rows_data) != 0:
 
-                    if len(rows_data) != 0:
+                            basketbal_reference_data_tmp = pd.DataFrame(rows_data)
+                            basketbal_reference_data_tmp.columns = config[self.feature_object.data_type]["list_columns"]
+                            basketbal_reference_data_tmp = basketbal_reference_data_tmp.dropna()
+                            basketbal_reference_data_tmp.loc[:, "id_season"] = self.feature_object.season
+                            basketbal_reference_data_tmp.loc[:, "tm"] = team
+                            basketbal_reference_data = pd.concat([basketbal_reference_data, basketbal_reference_data_tmp], axis=0)
 
-                        basketbal_reference_data_tmp = pd.DataFrame(rows_data)
-                        basketbal_reference_data_tmp.columns = config[self.feature_object.data_type]["list_columns"]
-                        basketbal_reference_data_tmp = basketbal_reference_data_tmp.dropna()
-                        basketbal_reference_data_tmp.loc[:, "id_season"] = self.feature_object.season
-                        basketbal_reference_data_tmp.loc[:, "tm"] = team
-                        basketbal_reference_data = pd.concat([basketbal_reference_data, basketbal_reference_data_tmp], axis=0)
+                    ################################################
+                else:
+                    logger.warning(f"Team {team}: Got status {response.status_code}")
+                    
+            except Exception as e:
+                logger.error(f"Team {team}: Exception - {str(e)}")
+
+            # if "200" in str(requests.get(url, timeout=60)):
+                
+            #     # collect HTML data and create beautiful soup object:
+            #     with urlopen(url) as html:
+
+            #         # create beautiful soup object from HTML
+            #         soup = BeautifulSoup(html, "html.parser")
+
+            #         if self.feature_object.data_type == 'player_attributes':
+            #             rows = soup.findAll('table')[config[self.feature_object.data_type]["beautifulsoup_tr_index"]]
+            #             rows = rows.find_all('tr')
+            #         else:
+            #             rows = soup.findAll("tr")[
+            #                 config[self.feature_object.data_type]["beautifulsoup_tr_index"] :
+            #             ]
+
+            #         rows_data = [
+            #             [td.getText() for td in rows[i].findAll("td")]
+            #             for i in range(len(rows))
+            #         ]
+
+            #         if len(rows_data) != 0:
+
+            #             basketbal_reference_data_tmp = pd.DataFrame(rows_data)
+            #             basketbal_reference_data_tmp.columns = config[self.feature_object.data_type]["list_columns"]
+            #             basketbal_reference_data_tmp = basketbal_reference_data_tmp.dropna()
+            #             basketbal_reference_data_tmp.loc[:, "id_season"] = self.feature_object.season
+            #             basketbal_reference_data_tmp.loc[:, "tm"] = team
+            #             basketbal_reference_data = pd.concat([basketbal_reference_data, basketbal_reference_data_tmp], axis=0)
 
             time.sleep(20)
 
