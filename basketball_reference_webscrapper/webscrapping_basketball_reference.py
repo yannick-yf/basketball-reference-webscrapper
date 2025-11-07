@@ -3,7 +3,7 @@ Class that take as inputs url and season and return all games teams stats
 """
 
 from dataclasses import dataclass
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 import time
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -117,13 +117,19 @@ class WebScrapBasketballReference:
                 )
 
             try:
-                response = requests.get(url, timeout=60)
+                # Check URL accessibility with proper User-Agent header
+                response = requests.get(url, timeout=60, headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                })
                 logger.info(f"Team {team}: Status Code = {response.status_code}")
                 
                 if response.status_code == 200:
-                    # ... scraping code ...
-                    # collect HTML data and create beautiful soup object:
-                    with urlopen(url) as html:
+                    # collect HTML data and create beautiful soup object with User-Agent header
+                    req = Request(url, headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    })
+                    
+                    with urlopen(req) as html:
 
                         # create beautiful soup object from HTML
                         soup = BeautifulSoup(html, "html.parser")
@@ -150,44 +156,18 @@ class WebScrapBasketballReference:
                             basketbal_reference_data_tmp.loc[:, "tm"] = team
                             basketbal_reference_data = pd.concat([basketbal_reference_data, basketbal_reference_data_tmp], axis=0)
 
-                    ################################################
                 else:
                     logger.warning(f"Team {team}: Got status {response.status_code}")
                     
             except Exception as e:
                 logger.error(f"Team {team}: Exception - {str(e)}")
 
-            # if "200" in str(requests.get(url, timeout=60)):
-                
-            #     # collect HTML data and create beautiful soup object:
-            #     with urlopen(url) as html:
-
-            #         # create beautiful soup object from HTML
-            #         soup = BeautifulSoup(html, "html.parser")
-
-            #         if self.feature_object.data_type == 'player_attributes':
-            #             rows = soup.findAll('table')[config[self.feature_object.data_type]["beautifulsoup_tr_index"]]
-            #             rows = rows.find_all('tr')
-            #         else:
-            #             rows = soup.findAll("tr")[
-            #                 config[self.feature_object.data_type]["beautifulsoup_tr_index"] :
-            #             ]
-
-            #         rows_data = [
-            #             [td.getText() for td in rows[i].findAll("td")]
-            #             for i in range(len(rows))
-            #         ]
-
-            #         if len(rows_data) != 0:
-
-            #             basketbal_reference_data_tmp = pd.DataFrame(rows_data)
-            #             basketbal_reference_data_tmp.columns = config[self.feature_object.data_type]["list_columns"]
-            #             basketbal_reference_data_tmp = basketbal_reference_data_tmp.dropna()
-            #             basketbal_reference_data_tmp.loc[:, "id_season"] = self.feature_object.season
-            #             basketbal_reference_data_tmp.loc[:, "tm"] = team
-            #             basketbal_reference_data = pd.concat([basketbal_reference_data, basketbal_reference_data_tmp], axis=0)
-
             time.sleep(20)
+
+        # Add defensive check before column selection
+        if basketbal_reference_data.empty:
+            logger.warning("No data was scraped for any team. Returning empty DataFrame with expected columns.")
+            return pd.DataFrame(columns=config[self.feature_object.data_type]["list_columns_to_select"])
 
         basketbal_reference_data = basketbal_reference_data[config[self.feature_object.data_type]["list_columns_to_select"]]
 
