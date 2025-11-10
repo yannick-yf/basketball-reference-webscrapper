@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "basketball-reference-webscrapper"
-version = "0.5.2"
+version = "0.5.3"
 description = "Python package for Basketball Reference that gathers data by scraping the website"
 authors = ["Yannick Flores <yannick.flores1992@gmail.com>"]
 readme = "README.md"
