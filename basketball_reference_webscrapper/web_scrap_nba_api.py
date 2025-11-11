@@ -1,15 +1,17 @@
 """
 Class that fetches NBA data from the official NBA API (stats.nba.com)
-as an alternative to Basketball Reference web scraping.
+using the nba_api Python package as an alternative to Basketball Reference web scraping.
 """
 
 from dataclasses import dataclass
 import time
 from typing import Dict, List, Optional
 import pandas as pd
-import requests
 import importlib_resources
 import yaml
+
+from nba_api.stats.endpoints import teamgamelogs, leaguegamefinder
+from nba_api.stats.library.parameters import SeasonType
 
 from basketball_reference_webscrapper.data_models.feature_model import FeatureIn
 from basketball_reference_webscrapper.utils.logs import get_logger
@@ -20,11 +22,11 @@ logger = get_logger("NBA_API_EXECUTION", log_level="INFO")
 @dataclass
 class WebScrapNBAApi:
     """
-    Class that fetches NBA data from the official NBA API.
+    Class that fetches NBA data from the official NBA API using the nba_api package.
 
     This class provides an alternative data source to Basketball Reference
-    by using the NBA's official stats API. It maintains the same output
-    structure and column names for compatibility.
+    by using the NBA's official stats API through the nba_api Python package.
+    It maintains the same output structure and column names for compatibility.
 
     Attributes:
         feature_object (FeatureIn): Input feature object containing data_type, season, and team
@@ -38,20 +40,6 @@ class WebScrapNBAApi:
             feature_object (FeatureIn): Feature object with data_type, season, and team
         """
         self.feature_object = feature_object
-
-        # NBA API base configuration
-        self.base_url = "https://stats.nba.com/stats/"
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://www.nba.com/',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Origin': 'https://www.nba.com',
-            'Connection': 'keep-alive',
-            'x-nba-stats-origin': 'stats',
-            'x-nba-stats-token': 'true'
-        }
 
         # Team abbreviation mapping (NBA API uses different abbreviations)
         self.team_mapping = self._get_team_mapping()
@@ -123,7 +111,7 @@ class WebScrapNBAApi:
 
     def _fetch_gamelog_data(self, team_abrev: str, config: Dict) -> pd.DataFrame:
         """
-        Fetch game log data for a specific team from NBA API.
+        Fetch game log data for a specific team from NBA API using nba_api package.
 
         Args:
             team_abrev (str): Team abbreviation (e.g., 'BOS')
@@ -142,71 +130,33 @@ class WebScrapNBAApi:
             logger.warning("Could not find NBA team ID for: %s", team_abrev)
             return pd.DataFrame()
 
-        # API endpoint and parameters
-        endpoint = "teamgamelogs"
-        params = {
-            'DateFrom': '',
-            'DateTo': '',
-            'GameSegment': '',
-            'LastNGames': 0,
-            'LeagueID': '00',
-            'Location': '',
-            'MeasureType': 'Base',
-            'Month': 0,
-            'OpponentTeamID': 0,
-            'Outcome': '',
-            'PORound': 0,
-            'PaceAdjust': 'N',
-            'PerMode': 'Totals',
-            'Period': 0,
-            'PlusMinus': 'N',
-            'Rank': 'N',
-            'Season': season_str,
-            'SeasonSegment': '',
-            'SeasonType': 'Regular Season',
-            'ShotClockRange': '',
-            'TeamID': nba_team_id,
-            'VsConference': '',
-            'VsDivision': ''
-        }
-
         try:
-            response = requests.get(
-                f"{self.base_url}{endpoint}",
-                params=params,
-                headers=self.headers,
-                timeout=30
+            # Use nba_api TeamGameLogs endpoint
+            gamelog_query = teamgamelogs.TeamGameLogs(
+                season_nullable=season_str,
+                season_type_nullable=SeasonType.regular,
+                team_id_nullable=str(nba_team_id)
             )
-            response.raise_for_status()
 
-            data = response.json()
+            # Get data as DataFrame
+            df = gamelog_query.get_data_frames()[0]
 
-            # Extract data from response
-            if 'resultSets' in data and len(data['resultSets']) > 0:
-                result_set = data['resultSets'][0]
-                headers = result_set['headers']
-                rows = result_set['rowSet']
-
-                df = pd.DataFrame(rows, columns=headers)
-
-                # Map NBA API columns to Basketball Reference format
-                df = self._map_gamelog_columns(df, team_abrev)
-
-                return df
-            else:
-                logger.warning("No data in API response for team: %s", team_abrev)
+            if df.empty:
+                logger.warning("No gamelog data returned for team: %s", team_abrev)
                 return pd.DataFrame()
 
-        except requests.exceptions.RequestException as e:
-            logger.error("API request failed for team %s: %s", team_abrev, str(e))
-            return pd.DataFrame()
+            # Map NBA API columns to Basketball Reference format
+            df = self._map_gamelog_columns(df, team_abrev)
+
+            return df
+
         except Exception as e:
-            logger.error("Error processing gamelog data for team %s: %s", team_abrev, str(e))
+            logger.error("Error fetching gamelog data for team %s: %s", team_abrev, str(e))
             return pd.DataFrame()
 
     def _fetch_schedule_data(self, team_abrev: str, config: Dict) -> pd.DataFrame:
         """
-        Fetch schedule data for a specific team from NBA API.
+        Fetch schedule data for a specific team from NBA API using nba_api package.
 
         Args:
             team_abrev (str): Team abbreviation (e.g., 'BOS')
@@ -225,48 +175,29 @@ class WebScrapNBAApi:
             logger.warning("Could not find NBA team ID for: %s", team_abrev)
             return pd.DataFrame()
 
-        # Use leaguegamefinder endpoint for schedule
-        endpoint = "leaguegamefinder"
-        params = {
-            'LeagueID': '00',
-            'Season': season_str,
-            'SeasonType': 'Regular Season',
-            'TeamID': nba_team_id,
-            'PlayerOrTeam': 'T'
-        }
-
         try:
-            response = requests.get(
-                f"{self.base_url}{endpoint}",
-                params=params,
-                headers=self.headers,
-                timeout=30
+            # Use nba_api LeagueGameFinder endpoint
+            gamefinder_query = leaguegamefinder.LeagueGameFinder(
+                team_id_nullable=str(nba_team_id),
+                season_nullable=season_str,
+                season_type_nullable=SeasonType.regular,
+                player_or_team_abbreviation='T'
             )
-            response.raise_for_status()
 
-            data = response.json()
+            # Get data as DataFrame
+            df = gamefinder_query.get_data_frames()[0]
 
-            # Extract data from response
-            if 'resultSets' in data and len(data['resultSets']) > 0:
-                result_set = data['resultSets'][0]
-                headers = result_set['headers']
-                rows = result_set['rowSet']
-
-                df = pd.DataFrame(rows, columns=headers)
-
-                # Map NBA API columns to Basketball Reference format
-                df = self._map_schedule_columns(df, team_abrev)
-
-                return df
-            else:
-                logger.warning("No schedule data in API response for team: %s", team_abrev)
+            if df.empty:
+                logger.warning("No schedule data returned for team: %s", team_abrev)
                 return pd.DataFrame()
 
-        except requests.exceptions.RequestException as e:
-            logger.error("API request failed for team %s: %s", team_abrev, str(e))
-            return pd.DataFrame()
+            # Map NBA API columns to Basketball Reference format
+            df = self._map_schedule_columns(df, team_abrev)
+
+            return df
+
         except Exception as e:
-            logger.error("Error processing schedule data for team %s: %s", team_abrev, str(e))
+            logger.error("Error fetching schedule data for team %s: %s", team_abrev, str(e))
             return pd.DataFrame()
 
     def _map_gamelog_columns(self, df: pd.DataFrame, team_abrev: str) -> pd.DataFrame:
@@ -296,7 +227,6 @@ class WebScrapNBAApi:
             'FTA': 'fta_tm',
             'FT_PCT': 'ft_prct_tm',
             'OREB': 'orb_tm',
-            'DREB': 'drb_tm',
             'REB': 'trb_tm',
             'AST': 'ast_tm',
             'STL': 'stl_tm',
@@ -308,7 +238,8 @@ class WebScrapNBAApi:
         # Rename columns
         df = df.rename(columns=column_mapping)
 
-        # Add game number
+        # Add game number (need to sort by date first)
+        df = df.sort_values('game_date')
         df['game_nb'] = range(1, len(df) + 1)
 
         # Parse matchup to get opponent and home/away
@@ -319,8 +250,7 @@ class WebScrapNBAApi:
             df['extdom'] = ''
             df['opp'] = ''
 
-        # Fetch opponent stats (would need separate API calls - simplified version)
-        # For now, set opponent stats to NaN or 0
+        # Set opponent stats to None (would require additional API calls)
         opponent_columns = ['fg_opp', 'fga_opp', 'fg_prct_opp', '3p_opp', '3pa_opp',
                            '3p_prct_opp', 'ft_opp', 'fta_opp', 'ft_prct_opp',
                            'orb_opp', 'trb_opp', 'ast_opp', 'stl_opp', 'blk_opp',
@@ -330,7 +260,7 @@ class WebScrapNBAApi:
             if col not in df.columns:
                 df[col] = None
 
-        # Convert percentage columns to decimal format (NBA API returns as decimal, BR shows as decimal)
+        # Convert percentage columns to string format
         pct_columns = ['fg_prct_tm', '3p_prct_tm', 'ft_prct_tm']
         for col in pct_columns:
             if col in df.columns:
@@ -360,6 +290,9 @@ class WebScrapNBAApi:
         # Rename columns
         df = df.rename(columns=column_mapping)
 
+        # Sort by game date to get chronological order
+        df = df.sort_values('game_date')
+
         # Parse matchup to get opponent and home/away
         if 'matchup_raw' in df.columns:
             df['extdom'] = df['matchup_raw'].apply(lambda x: '@' if ' @ ' in str(x) else '')
@@ -371,11 +304,11 @@ class WebScrapNBAApi:
         # Add time_start (not available in API - set to empty)
         df['time_start'] = ''
 
-        # Add overtime column (not directly available - would need to check if regulation PTS)
+        # Add overtime column (not directly available - set to empty)
         df['overtime'] = ''
 
-        # Extract opponent points if available in matchup or set to None
-        df['pts_opp'] = None  # Would need separate API call or parsing
+        # Set opponent points to None (would need separate API call)
+        df['pts_opp'] = None
 
         # Calculate running win/loss totals
         df['w_tot'] = (df['w_l'] == 'W').cumsum()
@@ -408,7 +341,7 @@ class WebScrapNBAApi:
                 current_count = 1
             streaks.append(f"{result} {current_count}" if pd.notna(result) else '')
 
-        return pd.Series(streaks)
+        return pd.Series(streaks, index=wl_series.index)
 
     def _get_nba_team_id(self, team_abrev: str) -> Optional[int]:
         """

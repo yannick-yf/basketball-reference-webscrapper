@@ -18,13 +18,18 @@ The `WebScrapNBAApi` class provides an alternative data source to Basketball Ref
 
 ## Installation
 
-The NBA API scraper is included in the `basketball-reference-webscrapper` package. No additional dependencies are required beyond the standard package requirements.
+The NBA API scraper is included in the `basketball-reference-webscrapper` package and uses the official `nba_api` Python package.
 
 ```bash
 pip install basketball-reference-webscrapper
 # or
 poetry install
 ```
+
+**Dependencies:**
+- `nba-api>=1.5`: Official Python wrapper for NBA Stats API
+
+**Important:** The NBA API blocks requests from many cloud hosting providers (AWS, Heroku, Google Cloud, Digital Ocean). **This implementation will work when running locally but may fail in cloud environments.** This is a limitation of the NBA's API, not this package.
 
 ## Quick Start
 
@@ -224,17 +229,26 @@ The NBA Stats API has rate limits (~100 requests per minute). The scraper includ
 
 ### 2. Cloud Provider Blocking
 
-The NBA API is known to block requests from certain cloud hosting providers:
-- Amazon AWS
-- Digital Ocean
-- Heroku
-- Google Cloud Platform (sometimes)
+**⚠️ CRITICAL LIMITATION**: The NBA Stats API actively blocks requests from cloud hosting providers:
+- Amazon AWS ❌
+- Digital Ocean ❌
+- Heroku ❌
+- Google Cloud Platform ❌
+- Most other cloud/VPS providers ❌
+
+**This means:**
+- ✅ Works when running **locally** (home/office computer)
+- ❌ **Fails in production** cloud deployments
+- ❌ Fails in CI/CD pipelines (GitHub Actions, etc.)
+- ❌ Fails in cloud notebooks (Google Colab, etc.)
+
+**Error you'll see:** `JSONDecodeError: Expecting value: line 1 column 1 (char 0)` - This indicates the API returned an empty response (blocked request)
 
 **Workarounds:**
-- Run locally during development
-- Use residential proxies
-- Use VPN services
-- Implement retry logic with different IP addresses
+- **Best option**: Use locally for development, use Basketball Reference scraper for production
+- Run from residential IP addresses
+- Use residential proxy services (not datacenter proxies)
+- Note: VPNs typically don't work as most VPN IPs are also blocked
 
 ### 3. Historical Data Availability
 
