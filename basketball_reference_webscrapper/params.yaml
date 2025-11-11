@@ -208,7 +208,6 @@ gamelog_nba_api:
     - opp
     - results
     - pts_tm
-    - pts_opp
     - fg_tm
     - fga_tm
     - fg_prct_tm
@@ -225,22 +224,6 @@ gamelog_nba_api:
     - blk_tm
     - tov_tm
     - pf_tm
-    - fg_opp
-    - fga_opp
-    - fg_prct_opp
-    - 3p_opp
-    - 3pa_opp
-    - 3p_prct_opp
-    - ft_opp
-    - fta_opp
-    - ft_prct_opp
-    - orb_opp
-    - trb_opp
-    - ast_opp
-    - stl_opp
-    - blk_opp
-    - tov_opp
-    - pf_opp
 
 schedule_nba_api:
   base_url: https://stats.nba.com/stats/leaguegamefinder
@@ -268,7 +251,6 @@ schedule_nba_api:
     - w_l
     - overtime
     - pts_tm
-    - pts_opp
     - w_tot
     - l_tot
     - streak_w_l

@@ -102,16 +102,15 @@ These could be added in future versions if needed.
 
 ### Columns Not Available in NBA API
 
-The following Basketball Reference columns cannot be directly obtained from the `teamgamelogs` endpoint:
+The following Basketball Reference columns cannot be directly obtained from the `teamgamelogs` endpoint and are **excluded from the output**:
 
 1. **Opponent Statistics**: All opponent stats (fg_opp, pts_opp, etc.)
    - Would require: Separate API call per game using opponent team ID
    - Impact: Significant increase in API calls (82+ additional calls per team)
-   - Future Enhancement: Could add optional parameter to fetch opponent stats
+   - Current implementation: **Excluded from output** to maintain data integrity
+   - Downstream handling: Data engineering pipelines can join opponent data separately if needed
 
-2. **pts_opp**: Opponent points
-   - Possible workaround: Parse from game result or make additional calls
-   - Current status: Set to None
+2. **Design Decision**: The scraper only returns columns that contain actual API data, not empty/null placeholders
 
 ### Data Type Conversions
 
@@ -140,7 +139,6 @@ The following Basketball Reference columns cannot be directly obtained from the 
 | overtime | (not available) | str | Set to empty string |
 | **Scoring** |
 | pts_tm | PTS | int | Team points |
-| pts_opp | (not available) | int/null | Currently None |
 | **Season Totals** |
 | w_tot | WL (calculated) | int | Cumulative wins |
 | l_tot | WL (calculated) | int | Cumulative losses |
@@ -202,7 +200,7 @@ These columns are computed from the WL series:
 3. **pts_opp**: Opponent points
    - Not directly available in team-centric query
    - Would require parsing or separate calls
-   - Current status: Set to None
+   - Current status: **Excluded from output**
 
 ## Team Abbreviation Mapping
 

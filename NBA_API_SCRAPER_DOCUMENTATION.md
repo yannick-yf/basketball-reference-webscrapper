@@ -259,12 +259,16 @@ Some historical data may not be available or may have different formats:
 
 ### 4. Opponent Statistics
 
-The current implementation does not fetch opponent statistics (pts_opp, fg_opp, etc.) in gamelog data. This would require:
-- Separate API call for each opponent
-- Significantly increased execution time
-- Risk of hitting rate limits
+**Design Decision:** The NBA API scraper does **not include** opponent statistics columns (pts_opp, fg_opp, etc.) in the output. This is intentional because:
+- NBA API doesn't provide opponent stats in the team gamelog/schedule endpoints
+- Would require separate API calls for each game (82+ additional API calls per team)
+- Significantly increased execution time and rate limit risk
+- Better handled in downstream data engineering pipelines
 
-**Future Enhancement:** Could implement optional opponent stat fetching with user flag.
+**For Data Engineering Pipelines:**
+- Fetch opponent data separately if needed
+- Join/merge opponent stats in your ETL process
+- This approach maintains data integrity and API efficiency
 
 ### 5. Missing Fields
 

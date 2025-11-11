@@ -55,8 +55,11 @@ print(df.head())
 | Speed | Fast (~1-2s per team) | Slow (~20-30s per team) |
 | Cloud-friendly | ❌ No | ✅ Yes |
 | Historical data | 2000-present | 1947-present |
-| Opponent stats | Limited | Complete |
+| Opponent stats | ❌ Not included | ✅ Complete |
 | Reliability | High (official API) | Medium (web scraping) |
+| Data integrity | ✅ Only actual API data | ✅ Complete dataset |
+
+**Note:** NBA API scraper only returns columns with actual data from the API. Opponent statistics require separate API calls and are excluded to maintain efficiency and data integrity.
 
 ## Key Differences from Raw API
 
