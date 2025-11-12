@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "basketball-reference-webscrapper"
-version = "0.5.3"
+version = "0.6.0"
 description = "Python package for Basketball Reference that gathers data by scraping the website"
 authors = ["Yannick Flores <yannick.flores1992@gmail.com>"]
 readme = "README.md"
@@ -15,6 +15,7 @@ pylint = "^2.15.10"
 beautifulsoup4 = "4.12.*"
 requests = "2.32.*"
 pydantic = "^2.6.1"
+nba-api = "^1.5"
 
 [tool.poetry.dev-dependencies]
 coverage = {extras = ["toml"], version = "6.5.*"}
