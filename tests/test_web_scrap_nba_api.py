@@ -315,46 +315,46 @@ class TestWebScrapNBAApi(TestCase):
     # Note: The following tests would make actual API calls and may fail in cloud environments
     # They are commented out but can be used for local testing
 
-    # def test_fetch_nba_api_data_single_team_gamelog(self):
-    #     """
-    #     GIVEN valid FeatureIn for single team gamelog
-    #     WHEN fetch_nba_api_data is called
-    #     THEN it returns DataFrame with expected columns
-    #     """
-    #     feature = FeatureIn(data_type="gamelog", season=2023, team="BOS")
-    #     scraper = WebScrapNBAApi(feature_object=feature)
-    #     df = scraper.fetch_nba_api_data()
-    #
-    #     assert isinstance(df, pd.DataFrame)
-    #     assert 'id_season' in df.columns
-    #     assert 'tm' in df.columns
-    #     assert 'pts_tm' in df.columns
+    def test_fetch_nba_api_data_single_team_gamelog(self):
+        """
+        GIVEN valid FeatureIn for single team gamelog
+        WHEN fetch_nba_api_data is called
+        THEN it returns DataFrame with expected columns
+        """
+        feature = FeatureIn(data_type="gamelog", season=2023, team="BOS")
+        scraper = WebScrapNBAApi(feature_object=feature)
+        df = scraper.fetch_nba_api_data()
+    
+        assert isinstance(df, pd.DataFrame)
+        assert 'id_season' in df.columns
+        assert 'tm' in df.columns
+        assert 'pts_tm' in df.columns
 
-    # def test_fetch_nba_api_data_multiple_teams(self):
-    #     """
-    #     GIVEN valid FeatureIn for multiple teams
-    #     WHEN fetch_nba_api_data is called
-    #     THEN it returns DataFrame with data for all teams
-    #     """
-    #     feature = FeatureIn(data_type="gamelog", season=2023, team=["BOS", "LAL"])
-    #     scraper = WebScrapNBAApi(feature_object=feature)
-    #     df = scraper.fetch_nba_api_data()
-    #
-    #     assert isinstance(df, pd.DataFrame)
-    #     assert set(df['tm'].unique()) == {'BOS', 'LAL'}
+    def test_fetch_nba_api_data_multiple_teams(self):
+        """
+        GIVEN valid FeatureIn for multiple teams
+        WHEN fetch_nba_api_data is called
+        THEN it returns DataFrame with data for all teams
+        """
+        feature = FeatureIn(data_type="gamelog", season=2023, team=["BOS", "LAL"])
+        scraper = WebScrapNBAApi(feature_object=feature)
+        df = scraper.fetch_nba_api_data()
+    
+        assert isinstance(df, pd.DataFrame)
+        assert set(df['tm'].unique()) == {'BOS', 'LAL'}
 
-    # def test_fetch_nba_api_data_schedule(self):
-    #     """
-    #     GIVEN valid FeatureIn for schedule data
-    #     WHEN fetch_nba_api_data is called
-    #     THEN it returns DataFrame with schedule columns
-    #     """
-    #     feature = FeatureIn(data_type="schedule", season=2023, team="BOS")
-    #     scraper = WebScrapNBAApi(feature_object=feature)
-    #     df = scraper.fetch_nba_api_data()
-    #
-    #     assert isinstance(df, pd.DataFrame)
-    #     assert 'w_l' in df.columns
-    #     assert 'w_tot' in df.columns
-    #     assert 'l_tot' in df.columns
-    #     assert 'streak_w_l' in df.columns
+    def test_fetch_nba_api_data_schedule(self):
+        """
+        GIVEN valid FeatureIn for schedule data
+        WHEN fetch_nba_api_data is called
+        THEN it returns DataFrame with schedule columns
+        """
+        feature = FeatureIn(data_type="schedule", season=2023, team="BOS")
+        scraper = WebScrapNBAApi(feature_object=feature)
+        df = scraper.fetch_nba_api_data()
+    
+        assert isinstance(df, pd.DataFrame)
+        assert 'w_l' in df.columns
+        assert 'w_tot' in df.columns
+        assert 'l_tot' in df.columns
+        assert 'streak_w_l' in df.columns
