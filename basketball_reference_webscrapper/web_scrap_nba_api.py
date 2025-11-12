@@ -10,7 +10,8 @@ import pandas as pd
 import importlib_resources
 import yaml
 
-from nba_api.stats.endpoints import teamgamelogs, leaguegamefinder
+from nba_api.stats.endpoints.teamgamelogs import TeamGameLogs
+from nba_api.stats.endpoints.leaguegamefinder import LeagueGameFinder
 from nba_api.stats.library.parameters import SeasonType
 
 from basketball_reference_webscrapper.data_models.feature_model import FeatureIn
@@ -141,7 +142,7 @@ class WebScrapNBAApi:
 
         try:
             # Use nba_api TeamGameLogs endpoint
-            gamelog_query = teamgamelogs.TeamGameLogs(
+            gamelog_query = TeamGameLogs(
                 season_nullable=season_str,
                 season_type_nullable=SeasonType.regular,
                 team_id_nullable=str(nba_team_id)
@@ -186,7 +187,7 @@ class WebScrapNBAApi:
 
         try:
             # Use nba_api LeagueGameFinder endpoint
-            gamefinder_query = leaguegamefinder.LeagueGameFinder(
+            gamefinder_query = LeagueGameFinder(
                 team_id_nullable=str(nba_team_id),
                 season_nullable=season_str,
                 season_type_nullable=SeasonType.regular,
