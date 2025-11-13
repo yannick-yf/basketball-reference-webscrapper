@@ -8,14 +8,14 @@ exclude = ["tests", "docs"]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-pandas = "2.*"
-numpy = "1.26.*"
+pandas = "2.2.*"
+numpy = "2.1.*"
 pytest = "*"
 pylint = "^2.15.10"
 beautifulsoup4 = "4.12.*"
 requests = "2.32.*"
 pydantic = "^2.6.1"
-nba-api = "^1.5"
+nba-api = "1.10.*"
 
 [tool.poetry.dev-dependencies]
 coverage = {extras = ["toml"], version = "6.5.*"}
