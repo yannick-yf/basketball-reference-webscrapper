@@ -12,7 +12,6 @@ import yaml
 
 from nba_api.stats.endpoints.teamgamelogs import TeamGameLogs
 from nba_api.stats.endpoints.leaguegamefinder import LeagueGameFinder
-from nba_api.stats.endpoints.boxscoresummaryv2 import BoxScoreSummaryV2
 from nba_api.stats.library.parameters import SeasonType
 
 from basketball_reference_webscrapper.data_models.feature_model import FeatureIn
@@ -292,7 +291,8 @@ class WebScrapNBAApi:
             'GAME_DATE': 'game_date',
             'MATCHUP': 'matchup_raw',
             'WL': 'w_l',
-            'PTS': 'pts_tm'
+            'PTS': 'pts_tm',
+            'MIN': 'total_minutes'  # Keep MIN for overtime calculation
         }
 
         # Rename columns
@@ -312,33 +312,36 @@ class WebScrapNBAApi:
         # Add time_start (not available in API - set to empty)
         df['time_start'] = ''
 
-        # Fetch overtime information for each game (if enabled in config)
-        fetch_overtime = config.get('fetch_overtime', True) if config else True
-        rate_limit_delay = config.get('rate_limit_delay', 0.6) if config else 0.6
+        # Calculate overtime from total minutes (much faster than API calls!)
+        # Regular game: 48 min * 5 players = 240 total team minutes
+        # Each OT period: 5 min * 5 players = 25 additional minutes
+        if 'total_minutes' in df.columns:
+            def calculate_overtime(minutes_str):
+                """Calculate overtime periods from total team minutes."""
+                try:
+                    if pd.isna(minutes_str):
+                        return ''
 
-        if fetch_overtime and 'GAME_ID' in df.columns:
-            logger.info("Fetching overtime data for %d games (this may take a few minutes)...", len(df))
-            overtime_values = []
-            for idx, game_id in enumerate(df['GAME_ID']):
-                # Add rate limiting to avoid API throttling
-                if idx > 0:
-                    time.sleep(rate_limit_delay)
+                    # Parse minutes (format might be "240" or "240:00")
+                    total_minutes = int(str(minutes_str).split(':')[0])
 
-                overtime = self._get_overtime_from_game(str(game_id))
-                overtime_values.append(overtime)
+                    # Calculate OT periods
+                    if total_minutes <= 240:
+                        return ''
+                    else:
+                        ot_periods = (total_minutes - 240) // 25
+                        if ot_periods == 1:
+                            return 'OT'
+                        else:
+                            return f'{ot_periods}OT'
+                except (ValueError, AttributeError):
+                    return ''
 
-                # Log progress every 10 games
-                if (idx + 1) % 10 == 0:
-                    logger.info("Fetched overtime data for %d/%d games", idx + 1, len(df))
-
-            df['overtime'] = overtime_values
-            logger.info("Completed fetching overtime data for all games")
-        elif not fetch_overtime:
-            logger.info("Overtime fetching is disabled in configuration, setting to empty")
-            df['overtime'] = ''
+            df['overtime'] = df['total_minutes'].apply(calculate_overtime)
+            # Drop the temporary total_minutes column
+            df = df.drop(columns=['total_minutes'])
         else:
-            # Fallback if GAME_ID not available
-            logger.warning("GAME_ID column not found, setting overtime to empty")
+            logger.warning("MIN column not found in API response, setting overtime to empty")
             df['overtime'] = ''
 
         # Note: Opponent points (pts_opp) not included in NBA API schedule endpoint
@@ -376,59 +379,6 @@ class WebScrapNBAApi:
             streaks.append(f"{result} {current_count}" if pd.notna(result) else '')
 
         return pd.Series(streaks, index=wl_series.index)
-
-    def _get_overtime_from_game(self, game_id: str) -> str:
-        """
-        Fetch overtime information for a specific game using BoxScoreSummaryV2.
-
-        Args:
-            game_id (str): NBA game ID
-
-        Returns:
-            str: Overtime string format matching Basketball Reference style:
-                - '' (empty string) if no overtime
-                - 'OT' if 1 overtime period
-                - '2OT' if 2 overtime periods
-                - '3OT' if 3 overtime periods, etc.
-        """
-        try:
-            # Fetch box score summary for the game
-            box_score = BoxScoreSummaryV2(game_id=game_id, timeout=30)
-
-            # Get line score data (contains overtime period points)
-            line_score_df = box_score.line_score.get_data_frame()
-
-            if line_score_df.empty:
-                logger.warning("No line score data for game: %s", game_id)
-                return ''
-
-            # Check overtime columns (PTS_OT1, PTS_OT2, ..., PTS_OT10)
-            # If any team scored in an OT period, that column will have non-null/non-zero values
-            overtime_count = 0
-            for ot_num in range(1, 11):  # Check up to 10 OT periods
-                ot_col = f'PTS_OT{ot_num}'
-                if ot_col in line_score_df.columns:
-                    # Check if any team has points in this OT period
-                    ot_values = line_score_df[ot_col].fillna(0)
-                    if (ot_values > 0).any():
-                        overtime_count = ot_num
-                    else:
-                        # No more overtime periods after this
-                        break
-                else:
-                    break
-
-            # Format overtime string to match Basketball Reference style
-            if overtime_count == 0:
-                return ''
-            elif overtime_count == 1:
-                return 'OT'
-            else:
-                return f'{overtime_count}OT'
-
-        except Exception as e:
-            logger.warning("Error fetching overtime for game %s: %s", game_id, str(e))
-            return ''
 
     def _get_nba_team_id(self, team_abrev: str) -> Optional[int]:
         """
