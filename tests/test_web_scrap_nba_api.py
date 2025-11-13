@@ -439,3 +439,16 @@ class TestWebScrapNBAApi(TestCase):
 
         result_df = scraper._map_schedule_columns(test_df, 'BOS')
         assert result_df['overtime'].iloc[0] == '3OT'
+
+    def test_overtime_calculation_via_schedule(self):
+        """
+        GIVEN OKC Schedule for 2026 season
+        THEN the two first games of 2026 should be 2OT
+        """
+        feature = FeatureIn(data_type="schedule", season=2026, team="OKC")
+        scraper = WebScrapNBAApi(feature_object=feature)
+
+        result_df = scraper.fetch_nba_api_data()
+
+        assert result_df['overtime'].iloc[0] == '2OT'
+        assert result_df['overtime'].iloc[1] == '2OT'

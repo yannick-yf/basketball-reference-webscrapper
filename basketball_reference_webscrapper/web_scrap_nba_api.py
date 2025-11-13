@@ -316,14 +316,20 @@ class WebScrapNBAApi:
         # Regular game: 48 min * 5 players = 240 total team minutes
         # Each OT period: 5 min * 5 players = 25 additional minutes
         if 'total_minutes' in df.columns:
-            def calculate_overtime(minutes_str):
+            def calculate_overtime(minutes_value):
                 """Calculate overtime periods from total team minutes."""
                 try:
-                    if pd.isna(minutes_str):
+                    if pd.isna(minutes_value):
                         return ''
 
-                    # Parse minutes (format might be "240" or "240:00")
-                    total_minutes = int(str(minutes_str).split(':')[0])
+                    # Handle different data types: int, float, or string
+                    if isinstance(minutes_value, (int, float)):
+                        total_minutes = int(minutes_value)
+                    elif isinstance(minutes_value, str):
+                        # Parse string format (might be "240", "240.0", or "240:00")
+                        total_minutes = int(float(minutes_value.split(':')[0]))
+                    else:
+                        return ''
 
                     # Calculate OT periods
                     if total_minutes <= 240:
@@ -334,7 +340,7 @@ class WebScrapNBAApi:
                             return 'OT'
                         else:
                             return f'{ot_periods}OT'
-                except (ValueError, AttributeError):
+                except (ValueError, AttributeError, TypeError):
                     return ''
 
             df['overtime'] = df['total_minutes'].apply(calculate_overtime)
