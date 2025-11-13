@@ -352,9 +352,102 @@ class TestWebScrapNBAApi(TestCase):
         feature = FeatureIn(data_type="schedule", season=2023, team="BOS")
         scraper = WebScrapNBAApi(feature_object=feature)
         df = scraper.fetch_nba_api_data()
-    
+
         assert isinstance(df, pd.DataFrame)
         assert 'w_l' in df.columns
         assert 'w_tot' in df.columns
         assert 'l_tot' in df.columns
         assert 'streak_w_l' in df.columns
+
+    def test_get_overtime_from_game_no_overtime(self):
+        """
+        GIVEN a game with no overtime
+        WHEN _get_overtime_from_game is called
+        THEN it returns empty string
+        """
+        from unittest.mock import Mock, patch
+
+        feature = FeatureIn(data_type="schedule", season=2023, team="BOS")
+        scraper = WebScrapNBAApi(feature_object=feature)
+
+        mock_line_score = pd.DataFrame({
+            'TEAM_ID': [1, 2],
+            'PTS_OT1': [0, 0],
+            'PTS_OT2': [0, 0]
+        })
+
+        with patch('basketball_reference_webscrapper.web_scrap_nba_api.BoxScoreSummaryV2') as mock_box:
+            mock_instance = Mock()
+            mock_instance.line_score.get_data_frame.return_value = mock_line_score
+            mock_box.return_value = mock_instance
+
+            result = scraper._get_overtime_from_game("0022300001")
+            assert result == ''
+
+    def test_get_overtime_from_game_one_overtime(self):
+        """
+        GIVEN a game with 1 overtime period
+        WHEN _get_overtime_from_game is called
+        THEN it returns 'OT'
+        """
+        from unittest.mock import Mock, patch
+
+        feature = FeatureIn(data_type="schedule", season=2023, team="BOS")
+        scraper = WebScrapNBAApi(feature_object=feature)
+
+        mock_line_score = pd.DataFrame({
+            'TEAM_ID': [1, 2],
+            'PTS_OT1': [10, 8],
+            'PTS_OT2': [0, 0]
+        })
+
+        with patch('basketball_reference_webscrapper.web_scrap_nba_api.BoxScoreSummaryV2') as mock_box:
+            mock_instance = Mock()
+            mock_instance.line_score.get_data_frame.return_value = mock_line_score
+            mock_box.return_value = mock_instance
+
+            result = scraper._get_overtime_from_game("0022300002")
+            assert result == 'OT'
+
+    def test_get_overtime_from_game_multiple_overtimes(self):
+        """
+        GIVEN a game with 2 overtime periods
+        WHEN _get_overtime_from_game is called
+        THEN it returns '2OT'
+        """
+        from unittest.mock import Mock, patch
+
+        feature = FeatureIn(data_type="schedule", season=2023, team="BOS")
+        scraper = WebScrapNBAApi(feature_object=feature)
+
+        mock_line_score = pd.DataFrame({
+            'TEAM_ID': [1, 2],
+            'PTS_OT1': [10, 10],
+            'PTS_OT2': [8, 5],
+            'PTS_OT3': [0, 0]
+        })
+
+        with patch('basketball_reference_webscrapper.web_scrap_nba_api.BoxScoreSummaryV2') as mock_box:
+            mock_instance = Mock()
+            mock_instance.line_score.get_data_frame.return_value = mock_line_score
+            mock_box.return_value = mock_instance
+
+            result = scraper._get_overtime_from_game("0022300003")
+            assert result == '2OT'
+
+    def test_get_overtime_from_game_error_handling(self):
+        """
+        GIVEN an API error when fetching overtime
+        WHEN _get_overtime_from_game is called
+        THEN it returns empty string and logs warning
+        """
+        from unittest.mock import Mock, patch
+
+        feature = FeatureIn(data_type="schedule", season=2023, team="BOS")
+        scraper = WebScrapNBAApi(feature_object=feature)
+
+        with patch('basketball_reference_webscrapper.web_scrap_nba_api.BoxScoreSummaryV2') as mock_box:
+            mock_box.side_effect = Exception("API Error")
+
+            result = scraper._get_overtime_from_game("0022300999")
+            assert result == ''

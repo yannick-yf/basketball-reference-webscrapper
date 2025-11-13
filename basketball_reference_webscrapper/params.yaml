@@ -229,6 +229,8 @@ schedule_nba_api:
   base_url: https://stats.nba.com/stats/leaguegamefinder
   endpoint: leaguegamefinder
   description: "NBA API endpoint for team schedules"
+  fetch_overtime: true  # Set to false to disable overtime fetching (faster but no OT data)
+  rate_limit_delay: 0.6  # Delay in seconds between API calls to avoid rate limiting
   list_columns:
     - game_date
     - time_start
