@@ -358,3 +358,93 @@ class TestWebScrapNBAApi(TestCase):
         assert 'w_tot' in df.columns
         assert 'l_tot' in df.columns
         assert 'streak_w_l' in df.columns
+
+    # Testing Overtime varbiables in Schedule Data
+    
+    def test_okc_first_two_games_double_overtime_2024_25(self):
+        """
+        Test that OKC's first two games of 2024-25 season were both double overtime (2OT).
+        
+        This test verifies:
+        1. The overtime column is populated correctly
+        2. Games 1 and 2 for OKC in 2024-25 season show '2OT'
+        """
+        # Arrange
+        feature_input = FeatureIn(
+            data_type="schedule",
+            season=2026,  # 2025-26 season
+            team="OKC"
+        )
+        
+        scraper = WebScrapNBAApi(feature_object=feature_input)
+        
+        # Act
+        schedule_data = scraper.fetch_nba_api_data()
+        
+        # Assert
+        assert not schedule_data.empty, "Schedule data should not be empty"
+        assert 'overtime' in schedule_data.columns, "Overtime column should exist"
+        
+        # Sort by game date to ensure chronological order
+        schedule_data = schedule_data.sort_values('game_date').reset_index(drop=True)
+        
+        first_game_ot = schedule_data.iloc[0]['overtime']
+        second_game_ot = schedule_data.iloc[1]['overtime']
+        
+        assert first_game_ot == '2OT', \
+            f"First game should be 2OT but got '{first_game_ot}'"
+        assert second_game_ot == '2OT', \
+            f"Second game should be 2OT but got '{second_game_ot}'"
+        
+        print(f"✓ Test passed: OKC's first two games were both 2OT")
+        print(f"  Game 1: {schedule_data.iloc[0]['game_date']} - {first_game_ot}")
+        print(f"  Game 2: {schedule_data.iloc[1]['game_date']} - {second_game_ot}")
+    
+    def test_overtime_values_format(self):
+        """
+        Test that overtime values follow the correct format.
+        """
+        # Arrange
+        feature_input = FeatureIn(
+            data_type="schedule",
+            season=2025,
+            team="OKC"
+        )
+        
+        scraper = WebScrapNBAApi(feature_object=feature_input)
+        
+        # Act
+        schedule_data = scraper.fetch_nba_api_data()
+        
+        # Assert
+        valid_ot_values = ['', 'OT', '2OT', '3OT', '4OT', '5OT']
+        
+        for idx, ot_value in enumerate(schedule_data['overtime']):
+            assert ot_value in valid_ot_values, \
+                f"Game {idx+1} has invalid overtime value: '{ot_value}'"
+        
+        print(f"✓ All overtime values are in valid format")
+    
+    def test_regulation_games_have_empty_overtime(self):
+        """
+        Test that regulation games (no overtime) have empty string for overtime.
+        """
+        # Arrange - use a team/season likely to have some regulation games
+        feature_input = FeatureIn(
+            data_type="schedule",
+            season=2025,
+            team="BOS"  # Boston Celtics
+        )
+        
+        scraper = WebScrapNBAApi(feature_object=feature_input)
+        
+        # Act
+        schedule_data = scraper.fetch_nba_api_data()
+        
+        # Assert
+        regulation_games = schedule_data[schedule_data['overtime'] == '']
+        
+        assert len(regulation_games) > 0, \
+            "Should have at least some regulation games"
+        
+        print(f"✓ Found {len(regulation_games)} regulation games with correct empty overtime value")
