@@ -13,6 +13,8 @@ import yaml
 from nba_api.stats.endpoints.teamgamelogs import TeamGameLogs
 from nba_api.stats.endpoints.leaguegamefinder import LeagueGameFinder
 from nba_api.stats.library.parameters import SeasonType
+from nba_api.stats.endpoints.boxscoresummaryv2 import BoxScoreSummaryV2
+from nba_api.stats.endpoints import playbyplayv2
 
 from basketball_reference_webscrapper.data_models.feature_model import FeatureIn
 from basketball_reference_webscrapper.utils.logs import get_logger
@@ -273,7 +275,40 @@ class WebScrapNBAApi:
                 df[col] = df[col].apply(lambda x: f"{x:.3f}" if pd.notna(x) else None)
 
         return df
-
+    
+    def _get_overtime_from_minutes(self, total_minutes: float) -> str:
+        """
+        Determine overtime periods based on total minutes played.
+        
+        Regular game: ~240 minutes (4 quarters × 12 min × 5 players)
+        Each OT adds: ~25 minutes (5 min × 5 players)
+        
+        Args:
+            total_minutes (float): Total minutes from MIN column
+            
+        Returns:
+            str: Empty string for regulation, 'OT' for 1 OT, '2OT', '3OT', etc.
+        """
+        if pd.isna(total_minutes):
+            return ''
+        
+        # Calculate overtime periods
+        # Regulation is ~240 minutes, each OT adds ~25 minutes
+        # Use 252.5 as threshold (midpoint between 240 and 265)
+        if total_minutes < 252.5:
+            return ''
+        
+        # Calculate number of OT periods
+        # Formula: (total_minutes - 240) / 25, rounded to nearest integer
+        ot_periods = round((total_minutes - 240) / 25)
+        
+        if ot_periods <= 0:
+            return ''
+        elif ot_periods == 1:
+            return 'OT'
+        else:
+            return f'{ot_periods}OT'
+    
     def _map_schedule_columns(self, df: pd.DataFrame, team_abrev: str) -> pd.DataFrame:
         """
         Map NBA API schedule columns to Basketball Reference format.
@@ -290,7 +325,8 @@ class WebScrapNBAApi:
             'GAME_DATE': 'game_date',
             'MATCHUP': 'matchup_raw',
             'WL': 'w_l',
-            'PTS': 'pts_tm'
+            'PTS': 'pts_tm',
+            'MIN': 'total_minutes'  # Keep MIN for overtime calculation
         }
 
         # Rename columns
@@ -310,11 +346,14 @@ class WebScrapNBAApi:
         # Add time_start (not available in API - set to empty)
         df['time_start'] = ''
 
-        # Add overtime column (not directly available - set to empty)
-        df['overtime'] = ''
-
-        # Note: Opponent points (pts_opp) not included in NBA API schedule endpoint
-        # This would require separate API calls or parsing game results
+        # Calculate overtime based on total minutes played
+        if 'total_minutes' in df.columns:
+            logger.info("Calculating overtime values from minutes played for team: %s", team_abrev)
+            df['overtime'] = df['total_minutes'].apply(self._get_overtime_from_minutes)
+            logger.info("Successfully calculated overtime data for team: %s", team_abrev)
+        else:
+            logger.warning("MIN column not found, setting overtime to empty")
+            df['overtime'] = ''
 
         # Calculate running win/loss totals
         df['w_tot'] = (df['w_l'] == 'W').cumsum()
@@ -324,7 +363,7 @@ class WebScrapNBAApi:
         df['streak_w_l'] = self._calculate_streak(df['w_l'])
 
         return df
-
+    
     def _calculate_streak(self, wl_series: pd.Series) -> pd.Series:
         """
         Calculate win/loss streak from W/L series.
