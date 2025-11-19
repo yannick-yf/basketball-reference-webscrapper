@@ -254,3 +254,11 @@ schedule_nba_api:
     - w_tot
     - l_tot
     - streak_w_l
+
+schedule_non_played_games_nba_api:
+  description: "NBA API endpoint for team schedules including non-played games"
+  list_columns_to_select:
+    - game_id
+    - game_date
+    - tm
+    - opp
