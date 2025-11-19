@@ -448,3 +448,17 @@ class TestWebScrapNBAApi(TestCase):
             "Should have at least some regulation games"
         
         print(f"✓ Found {len(regulation_games)} regulation games with correct empty overtime value")
+
+    
+    def test_fetch_nba_api_data_schedule(self):
+        """
+        GIVEN valid FeatureIn for schedule data including non-played games
+        WHEN fetch_nba_api_data is called 
+        THEN it returns DataFrame with schedule columns
+        """
+        feature = FeatureIn(data_type="schedule_non_played_games", season=2026, team="all")
+        scraper = WebScrapNBAApi(feature_object=feature)
+        df = scraper.fetch_nba_api_data()
+    
+        assert isinstance(df, pd.DataFrame)
+        assert df.columns.to_list() == ['game_id', 'game_date', 'tm', 'opp']

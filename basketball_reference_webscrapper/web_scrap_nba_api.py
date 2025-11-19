@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 import importlib_resources
 import yaml
+import requests
 
 from nba_api.stats.endpoints.teamgamelogs import TeamGameLogs
 from nba_api.stats.endpoints.leaguegamefinder import LeagueGameFinder
@@ -83,6 +84,10 @@ class WebScrapNBAApi:
                     team_data = self._fetch_gamelog_data(team_abrev, config)
                 elif self.feature_object.data_type == "schedule":
                     team_data = self._fetch_schedule_data(team_abrev, config)
+                elif self.feature_object.data_type == "schedule_non_played_games":
+                    team_data = self._fetch_schedule_data_non_played_games()
+                    nba_api_data = team_data
+                    break
                 else:
                     logger.warning("Unsupported data type: %s", self.feature_object.data_type)
                     continue
@@ -165,6 +170,39 @@ class WebScrapNBAApi:
         except Exception as e:
             logger.error("Error fetching gamelog data for team %s: %s", team_abrev, str(e))
             return pd.DataFrame()
+
+    def _fetch_schedule_data_non_played_games(self) -> pd.DataFrame:
+        """
+        Fetch schedule data for a specific team from NBA API using nba_api package.
+
+        Args:
+            team_abrev (str): Team abbreviation (e.g., 'BOS')
+            config (Dict): Configuration dictionary
+
+        Returns:
+            pd.DataFrame: Schedule data with mapped column names
+        """
+
+        url = f"http://data.nba.com/data/10s/v2015/json/mobile_teams/nba/{str(self.feature_object.season-1)}/league/00_full_schedule.json"
+
+        response = requests.get(url)
+        schedule_data = response.json()
+
+        # Process the data to extract games
+        all_games = []
+        for month in schedule_data['lscd']:
+            for game in month['mscd']['g']:
+                # Extract relevant game information
+                game_info = {
+                    'game_id': game['gid'],
+                    'game_date': game['gdte'],
+                    'tm': game['h']['ta'],
+                    'opp': game['v']['ta']
+                }
+                all_games.append(game_info)
+
+        schedule_w_non_played_games = pd.DataFrame(all_games)
+        return schedule_w_non_played_games
 
     def _fetch_schedule_data(self, team_abrev: str, config: Dict) -> pd.DataFrame:
         """
@@ -507,10 +545,10 @@ class WebScrapNBAApi:
     def _get_data_type_validation(self) -> None:
         """Validate data_type input."""
         if self.feature_object.data_type is not None:
-            if str(self.feature_object.data_type) not in ["gamelog", "schedule"]:
+            if str(self.feature_object.data_type) not in ["gamelog", "schedule", "schedule_non_played_games"]:
                 raise ValueError(
                     "data_type value provided is not supported by the NBA API scraper. "
-                    "Accepted values are: 'gamelog', 'schedule'. "
+                    "Accepted values are: 'gamelog', 'schedule', 'schedule_non_played_games_nba_api'. "
                     "Read documentation for more details"
                 )
         else:
