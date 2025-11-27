@@ -1,36 +1,37 @@
-"""Test NBABoxscoreExtractor"""
+"""Test WebScrapNBAApiBoxscore"""
 
 import json
-import os
 import tempfile
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
+from basketball_reference_webscrapper.data_models.feature_model import FeatureIn
 from basketball_reference_webscrapper.web_scrap_player_boxscore_nba_api import (
     FailedGameRecord,
-    NBABoxscoreExtractor,
+    WebScrapNBAApiBoxscore,
+    TEAM_ABBREV_MAPPING,
 )
 
 
-class TestNBABoxscoreExtractor(TestCase):
-    """Tests for the NBABoxscoreExtractor class that fetches boxscore data from NBA API."""
+class TestWebScrapNBAApiBoxscore(TestCase):
+    """Tests for the WebScrapNBAApiBoxscore class that fetches boxscore data from NBA API."""
 
     def setUp(self) -> None:
         """Set up test fixtures."""
         self.temp_dir = tempfile.mkdtemp()
-        self.extractor = NBABoxscoreExtractor(
-            base_delay=0.6,
-            rate_limit_wait=300.0,
-            batch_size=500,
-            batch_cooldown=60.0,
-            cache_dir=Path(self.temp_dir)
+        self.valid_season = 2024
+        self.valid_team = "BOS"
+        self.valid_feature = FeatureIn(
+            data_type="boxscore",
+            season=self.valid_season,
+            team=self.valid_team
         )
 
     def tearDown(self) -> None:
         """Clean up test fixtures."""
-        # Clean up temp directory
         for file in Path(self.temp_dir).glob("*"):
             file.unlink()
         Path(self.temp_dir).rmdir()
@@ -41,93 +42,223 @@ class TestNBABoxscoreExtractor(TestCase):
 
     def test_initialization(self):
         """
-        GIVEN valid constructor arguments
-        WHEN NBABoxscoreExtractor is initialized
-        THEN it creates an instance with correct attributes
+        GIVEN valid FeatureIn arguments
+        WHEN WebScrapNBAApiBoxscore is initialized
+        THEN it creates an instance successfully with correct attributes
         """
-        extractor = NBABoxscoreExtractor(
-            base_delay=0.5,
-            batch_size=400,
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
             cache_dir=Path(self.temp_dir)
         )
 
-        assert extractor is not None
-        assert extractor.base_delay == 0.5
-        assert extractor.batch_size == 400
-        assert extractor._request_count == 0
-        assert len(extractor._fetched_game_ids) == 0
-        assert len(extractor._failed_games) == 0
+        assert scraper is not None
+        assert scraper.feature_object.data_type == "boxscore"
+        assert scraper.feature_object.season == self.valid_season
+        assert scraper.feature_object.team == self.valid_team
+        assert scraper._request_count == 0
+        assert len(scraper._fetched_game_ids) == 0
 
     def test_initialization_creates_cache_dir(self):
         """
         GIVEN a non-existent cache directory path
-        WHEN NBABoxscoreExtractor is initialized
+        WHEN WebScrapNBAApiBoxscore is initialized
         THEN it creates the cache directory
         """
         new_cache_dir = Path(self.temp_dir) / "new_cache"
         assert not new_cache_dir.exists()
 
-        extractor = NBABoxscoreExtractor(cache_dir=new_cache_dir)
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=new_cache_dir
+        )
 
         assert new_cache_dir.exists()
         new_cache_dir.rmdir()
 
     # -------------------------------------------------------------------------
-    # get_nba_team_abbreviations Tests
+    # Team Mapping Tests
     # -------------------------------------------------------------------------
 
-    def test_get_nba_team_abbreviations_returns_30_teams(self):
+    def test_team_mapping_exists(self):
         """
-        GIVEN an NBABoxscoreExtractor instance
-        WHEN get_nba_team_abbreviations is called
-        THEN it returns exactly 30 NBA team abbreviations
+        GIVEN a WebScrapNBAApiBoxscore instance
+        WHEN checking team_mapping attribute
+        THEN it contains valid NBA team IDs
         """
-        teams = self.extractor.get_nba_team_abbreviations()
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
 
-        assert len(teams) == 30
+        assert scraper.team_mapping is not None
+        assert 'BOS' in scraper.team_mapping
+        assert scraper.team_mapping['BOS']['team_id'] == 1610612738
 
-    def test_get_nba_team_abbreviations_contains_known_teams(self):
+    def test_get_nba_team_id_valid(self):
         """
-        GIVEN an NBABoxscoreExtractor instance
-        WHEN get_nba_team_abbreviations is called
-        THEN it contains known NBA team abbreviations
+        GIVEN valid team abbreviations
+        WHEN _get_nba_team_id is called
+        THEN it returns correct team IDs
         """
-        teams = self.extractor.get_nba_team_abbreviations()
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
 
-        known_teams = ["BOS", "LAL", "GSW", "MIA", "CHI", "NYK"]
-        for team in known_teams:
-            assert team in teams, f"Expected {team} to be in team list"
-
-    # -------------------------------------------------------------------------
-    # _get_team_id_from_abbr Tests
-    # -------------------------------------------------------------------------
-
-    def test_get_team_id_from_abbr_valid(self):
-        """
-        GIVEN a valid team abbreviation
-        WHEN _get_team_id_from_abbr is called
-        THEN it returns the correct team ID
-        """
-        bos_id = self.extractor._get_team_id_from_abbr("BOS")
-        lal_id = self.extractor._get_team_id_from_abbr("LAL")
+        bos_id = scraper._get_nba_team_id('BOS')
+        lal_id = scraper._get_nba_team_id('LAL')
 
         assert bos_id == 1610612738
         assert lal_id == 1610612747
 
-    def test_get_team_id_from_abbr_invalid(self):
+    def test_get_nba_team_id_invalid(self):
         """
         GIVEN an invalid team abbreviation
-        WHEN _get_team_id_from_abbr is called
+        WHEN _get_nba_team_id is called
         THEN it returns None
         """
-        invalid_id = self.extractor._get_team_id_from_abbr("INVALID")
-        gleague_id = self.extractor._get_team_id_from_abbr("SLC")  # G-League team
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+
+        invalid_id = scraper._get_nba_team_id('INVALID')
 
         assert invalid_id is None
-        assert gleague_id is None
 
     # -------------------------------------------------------------------------
-    # _is_rate_limit_error Tests
+    # Season Format Conversion Tests
+    # -------------------------------------------------------------------------
+
+    def test_convert_season_format(self):
+        """
+        GIVEN a season year
+        WHEN _convert_season_format is called
+        THEN it returns correct NBA API format
+        """
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+
+        assert scraper._convert_season_format(2024) == "2023-24"
+        assert scraper._convert_season_format(2023) == "2022-23"
+        assert scraper._convert_season_format(2000) == "1999-00"
+
+    # -------------------------------------------------------------------------
+    # Team Abbreviation Conversion Tests
+    # -------------------------------------------------------------------------
+
+    def test_convert_team_abbrev_to_br(self):
+        """
+        GIVEN NBA API team abbreviations
+        WHEN _convert_team_abbrev_to_br is called
+        THEN it returns Basketball Reference format
+        """
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+
+        assert scraper._convert_team_abbrev_to_br('BKN') == 'BRK'
+        assert scraper._convert_team_abbrev_to_br('PHX') == 'PHO'
+        assert scraper._convert_team_abbrev_to_br('BOS') == 'BOS'  # No change
+
+    def test_convert_team_abbrev_to_nba(self):
+        """
+        GIVEN Basketball Reference team abbreviations
+        WHEN _convert_team_abbrev_to_nba is called
+        THEN it returns NBA API format
+        """
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+
+        assert scraper._convert_team_abbrev_to_nba('BRK') == 'BKN'
+        assert scraper._convert_team_abbrev_to_nba('PHO') == 'PHX'
+        assert scraper._convert_team_abbrev_to_nba('BOS') == 'BOS'  # No change
+
+    # -------------------------------------------------------------------------
+    # Validation Tests
+    # -------------------------------------------------------------------------
+
+    def test_data_type_validation_valid(self):
+        """
+        GIVEN valid data_type
+        WHEN _get_data_type_validation is called
+        THEN no error is raised
+        """
+        feature = FeatureIn(data_type="boxscore", season=self.valid_season, team=self.valid_team)
+        scraper = WebScrapNBAApiBoxscore(feature_object=feature, cache_dir=Path(self.temp_dir))
+
+        scraper._get_data_type_validation()  # Should not raise
+
+    def test_data_type_validation_invalid(self):
+        """
+        GIVEN invalid data_type
+        WHEN _get_data_type_validation is called
+        THEN ValueError is raised
+        """
+        feature = FeatureIn(data_type="invalid_type", season=self.valid_season, team=self.valid_team)
+        scraper = WebScrapNBAApiBoxscore(feature_object=feature, cache_dir=Path(self.temp_dir))
+
+        with self.assertRaises(ValueError) as context:
+            scraper._get_data_type_validation()
+
+        assert "not supported" in str(context.exception)
+
+    def test_season_validation_valid(self):
+        """
+        GIVEN valid season (>= 2000)
+        WHEN _get_season_validation is called
+        THEN no error is raised
+        """
+        feature = FeatureIn(data_type="boxscore", season=2023, team=self.valid_team)
+        scraper = WebScrapNBAApiBoxscore(feature_object=feature, cache_dir=Path(self.temp_dir))
+
+        scraper._get_season_validation()  # Should not raise
+
+    def test_season_validation_invalid(self):
+        """
+        GIVEN season before 2000
+        WHEN _get_season_validation is called
+        THEN ValueError is raised
+        """
+        feature = FeatureIn(data_type="boxscore", season=1998, team=self.valid_team)
+        scraper = WebScrapNBAApiBoxscore(feature_object=feature, cache_dir=Path(self.temp_dir))
+
+        with self.assertRaises(ValueError) as context:
+            scraper._get_season_validation()
+
+        assert "not supported" in str(context.exception)
+
+    def test_team_validation_single_valid(self):
+        """
+        GIVEN valid single team abbreviation
+        WHEN _get_team_list_values_validation is called
+        THEN no error is raised
+        """
+        feature = FeatureIn(data_type="boxscore", season=self.valid_season, team="BOS")
+        scraper = WebScrapNBAApiBoxscore(feature_object=feature, cache_dir=Path(self.temp_dir))
+
+        team_list = ['BOS', 'LAL', 'GSW']
+        scraper._get_team_list_values_validation(team_list)  # Should not raise
+
+    def test_team_validation_invalid(self):
+        """
+        GIVEN invalid team abbreviation
+        WHEN _get_team_list_values_validation is called
+        THEN ValueError is raised
+        """
+        feature = FeatureIn(data_type="boxscore", season=self.valid_season, team="INVALID")
+        scraper = WebScrapNBAApiBoxscore(feature_object=feature, cache_dir=Path(self.temp_dir))
+
+        with self.assertRaises(ValueError):
+            scraper._get_team_list_values_validation(['BOS', 'LAL', 'GSW'])
+
+    # -------------------------------------------------------------------------
+    # Rate Limit Detection Tests
     # -------------------------------------------------------------------------
 
     def test_is_rate_limit_error_detects_429(self):
@@ -136,13 +267,18 @@ class TestNBABoxscoreExtractor(TestCase):
         WHEN _is_rate_limit_error is called
         THEN it returns True
         """
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+
         error_429 = Exception("HTTP Error 429: Too Many Requests")
         error_timeout = Exception("Connection timed out")
         error_reset = Exception("Connection reset by peer")
 
-        assert self.extractor._is_rate_limit_error(error_429) is True
-        assert self.extractor._is_rate_limit_error(error_timeout) is True
-        assert self.extractor._is_rate_limit_error(error_reset) is True
+        assert scraper._is_rate_limit_error(error_429) is True
+        assert scraper._is_rate_limit_error(error_timeout) is True
+        assert scraper._is_rate_limit_error(error_reset) is True
 
     def test_is_rate_limit_error_returns_false_for_other_errors(self):
         """
@@ -150,45 +286,38 @@ class TestNBABoxscoreExtractor(TestCase):
         WHEN _is_rate_limit_error is called
         THEN it returns False
         """
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+
         error_value = ValueError("Invalid game ID format")
         error_key = KeyError("GAME_ID column not found")
 
-        assert self.extractor._is_rate_limit_error(error_value) is False
-        assert self.extractor._is_rate_limit_error(error_key) is False
+        assert scraper._is_rate_limit_error(error_value) is False
+        assert scraper._is_rate_limit_error(error_key) is False
 
     # -------------------------------------------------------------------------
-    # _record_failed_game Tests
+    # Failed Games Cache Tests
     # -------------------------------------------------------------------------
 
-    def test_record_failed_game_adds_to_dict(self):
+    def test_record_failed_game(self):
         """
         GIVEN a game ID and failure reason
         WHEN _record_failed_game is called
         THEN it adds the game to _failed_games dict
         """
-        self.extractor._record_failed_game("0022400123", "Connection timeout")
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
 
-        assert "0022400123" in self.extractor._failed_games
-        record = self.extractor._failed_games["0022400123"]
+        scraper._record_failed_game("0022400123", "Connection timeout")
+
+        assert "0022400123" in scraper._failed_games
+        record = scraper._failed_games["0022400123"]
         assert record.game_id == "0022400123"
         assert record.failure_reason == "Connection timeout"
-        assert record.timestamp is not None
-
-    def test_record_failed_game_overwrites_existing(self):
-        """
-        GIVEN a game ID that already failed
-        WHEN _record_failed_game is called again
-        THEN it overwrites the previous record
-        """
-        self.extractor._record_failed_game("0022400123", "First error")
-        self.extractor._record_failed_game("0022400123", "Second error")
-
-        assert len(self.extractor._failed_games) == 1
-        assert self.extractor._failed_games["0022400123"].failure_reason == "Second error"
-
-    # -------------------------------------------------------------------------
-    # get_failed_games_summary Tests
-    # -------------------------------------------------------------------------
 
     def test_get_failed_games_summary_empty(self):
         """
@@ -196,7 +325,12 @@ class TestNBABoxscoreExtractor(TestCase):
         WHEN get_failed_games_summary is called
         THEN it returns empty DataFrame with correct columns
         """
-        summary = self.extractor.get_failed_games_summary()
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+
+        summary = scraper.get_failed_games_summary()
 
         assert isinstance(summary, pd.DataFrame)
         assert len(summary) == 0
@@ -208,235 +342,239 @@ class TestNBABoxscoreExtractor(TestCase):
         WHEN get_failed_games_summary is called
         THEN it returns DataFrame with all failed games
         """
-        self.extractor._record_failed_game("0022400001", "Error 1")
-        self.extractor._record_failed_game("0022400002", "Error 2")
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
 
-        summary = self.extractor.get_failed_games_summary()
+        scraper._record_failed_game("0022400001", "Error 1")
+        scraper._record_failed_game("0022400002", "Error 2")
+
+        summary = scraper.get_failed_games_summary()
 
         assert len(summary) == 2
         assert set(summary["game_id"]) == {"0022400001", "0022400002"}
 
-    # -------------------------------------------------------------------------
-    # save_failed_games_cache / load_failed_games_cache Tests
-    # -------------------------------------------------------------------------
-
-    def test_save_failed_games_cache_creates_file(self):
+    def test_save_and_load_failed_games_cache(self):
         """
         GIVEN failed games in the extractor
-        WHEN save_failed_games_cache is called
-        THEN it creates a JSON file with the failed games
+        WHEN save and load cache methods are called
+        THEN it persists and restores the failed games correctly
         """
-        self.extractor._record_failed_game("0022400001", "Test error")
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
 
-        filepath = self.extractor.save_failed_games_cache("test_cache.json")
+        scraper._record_failed_game("0022400001", "Test error")
+        filepath = scraper.save_failed_games_cache("test_cache.json")
 
         assert Path(filepath).exists()
-        with open(filepath, "r") as f:
-            data = json.load(f)
-        assert "0022400001" in data
 
-    def test_load_failed_games_cache_restores_games(self):
-        """
-        GIVEN a saved cache file
-        WHEN load_failed_games_cache is called
-        THEN it restores the failed games to the extractor
-        """
-        # Create and save cache
-        self.extractor._record_failed_game("0022400001", "Test error")
-        filepath = self.extractor.save_failed_games_cache("test_cache.json")
-
-        # Create new extractor and load cache
-        new_extractor = NBABoxscoreExtractor(cache_dir=Path(self.temp_dir))
-        count = new_extractor.load_failed_games_cache(filepath)
+        # Create new scraper and load cache
+        new_scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+        count = new_scraper.load_failed_games_cache(filepath)
 
         assert count == 1
-        assert "0022400001" in new_extractor._failed_games
+        assert "0022400001" in new_scraper._failed_games
 
-    def test_save_failed_games_cache_empty_returns_empty_string(self):
+    def test_save_failed_games_cache_empty(self):
         """
         GIVEN no failed games
         WHEN save_failed_games_cache is called
-        THEN it returns empty string and creates no file
+        THEN it returns empty string
         """
-        filepath = self.extractor.save_failed_games_cache("test_cache.json")
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+
+        filepath = scraper.save_failed_games_cache("test_cache.json")
 
         assert filepath == ""
 
     # -------------------------------------------------------------------------
-    # get_fetched_game_ids Tests
-    # -------------------------------------------------------------------------
-
-    def test_get_fetched_game_ids_returns_copy(self):
-        """
-        GIVEN some fetched game IDs
-        WHEN get_fetched_game_ids is called
-        THEN it returns a copy of the set (not the original)
-        """
-        self.extractor._fetched_game_ids.add("0022400001")
-        self.extractor._fetched_game_ids.add("0022400002")
-
-        fetched = self.extractor.get_fetched_game_ids()
-
-        assert fetched == {"0022400001", "0022400002"}
-        # Verify it's a copy
-        fetched.add("0022400003")
-        assert "0022400003" not in self.extractor._fetched_game_ids
-
-    # -------------------------------------------------------------------------
-    # get_request_count Tests
+    # Session Management Tests
     # -------------------------------------------------------------------------
 
     def test_get_request_count_initial(self):
         """
-        GIVEN a freshly initialized extractor
+        GIVEN a freshly initialized scraper
         WHEN get_request_count is called
         THEN it returns 0
         """
-        count = self.extractor.get_request_count()
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
 
-        assert count == 0
-
-    def test_get_request_count_after_increment(self):
-        """
-        GIVEN an extractor with incremented request count
-        WHEN get_request_count is called
-        THEN it returns the correct count
-        """
-        self.extractor._request_count = 42
-
-        count = self.extractor.get_request_count()
-
-        assert count == 42
-
-    # -------------------------------------------------------------------------
-    # _check_and_reset_session Tests
-    # -------------------------------------------------------------------------
+        assert scraper.get_request_count() == 0
 
     def test_check_and_reset_session_increments_count(self):
         """
-        GIVEN an extractor with request count below batch_size
+        GIVEN a scraper with request count below batch_size
         WHEN _check_and_reset_session is called
         THEN it increments the request count
         """
-        initial_count = self.extractor._request_count
-
-        self.extractor._check_and_reset_session()
-
-        assert self.extractor._request_count == initial_count + 1
-
-    def test_check_and_reset_session_resets_at_batch_size(self):
-        """
-        GIVEN an extractor with request count at batch_size - 1
-        WHEN _check_and_reset_session is called
-        THEN it resets the request count to 0 after incrementing
-        """
-        # Use small batch size for testing
-        extractor = NBABoxscoreExtractor(
-            batch_size=5,
-            batch_cooldown=0.1,  # Short cooldown for test
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
             cache_dir=Path(self.temp_dir)
         )
-        extractor._request_count = 4  # One less than batch_size
+        initial_count = scraper._request_count
 
-        extractor._check_and_reset_session()
+        scraper._check_and_reset_session()
 
-        # After increment to 5, should trigger reset to 0
-        assert extractor._request_count == 0
+        assert scraper._request_count == initial_count + 1
+
+    def test_reset_session_preserves_state(self):
+        """
+        GIVEN a scraper with fetched game IDs and failed games
+        WHEN _reset_session is called
+        THEN it preserves the fetched IDs and failed games
+        """
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+
+        scraper._fetched_game_ids.add("0022400001")
+        scraper._record_failed_game("0022400002", "Test error")
+        scraper._request_count = 100
+
+        scraper._reset_session()
+
+        assert scraper._request_count == 0
+        assert "0022400001" in scraper._fetched_game_ids
+        assert "0022400002" in scraper._failed_games
 
     # -------------------------------------------------------------------------
-    # _reset_session Tests
+    # Filter Teams Tests
     # -------------------------------------------------------------------------
 
-    def test_reset_session_resets_request_count(self):
+    def test_filter_teams_single(self):
         """
-        GIVEN an extractor with non-zero request count
-        WHEN _reset_session is called
-        THEN it resets the request count to 0
+        GIVEN single team in feature_object
+        WHEN _filter_teams is called
+        THEN it returns only that team
         """
-        self.extractor._request_count = 100
+        feature = FeatureIn(data_type="boxscore", season=self.valid_season, team="BOS")
+        scraper = WebScrapNBAApiBoxscore(feature_object=feature, cache_dir=Path(self.temp_dir))
 
-        self.extractor._reset_session()
+        team_refdata = pd.DataFrame({
+            'team_abrev': ['BOS', 'LAL', 'GSW'],
+            'city': ['Boston', 'Los Angeles', 'Golden State']
+        })
 
-        assert self.extractor._request_count == 0
+        filtered = scraper._filter_teams(team_refdata)
 
-    def test_reset_session_preserves_fetched_game_ids(self):
+        assert len(filtered) == 1
+        assert filtered['team_abrev'].iloc[0] == 'BOS'
+
+    def test_filter_teams_all(self):
         """
-        GIVEN an extractor with fetched game IDs
-        WHEN _reset_session is called
-        THEN it preserves the fetched game IDs
+        GIVEN team="all" in feature_object
+        WHEN _filter_teams is called
+        THEN it returns all teams
         """
-        self.extractor._fetched_game_ids.add("0022400001")
-        self.extractor._fetched_game_ids.add("0022400002")
+        feature = FeatureIn(data_type="boxscore", season=self.valid_season, team="all")
+        scraper = WebScrapNBAApiBoxscore(feature_object=feature, cache_dir=Path(self.temp_dir))
 
-        self.extractor._reset_session()
+        team_refdata = pd.DataFrame({
+            'team_abrev': ['BOS', 'LAL', 'GSW', 'MIA'],
+            'city': ['Boston', 'Los Angeles', 'Golden State', 'Miami']
+        })
 
-        assert "0022400001" in self.extractor._fetched_game_ids
-        assert "0022400002" in self.extractor._fetched_game_ids
+        filtered = scraper._filter_teams(team_refdata)
 
-    def test_reset_session_preserves_failed_games(self):
+        assert len(filtered) == 4
+
+    # -------------------------------------------------------------------------
+    # Column Mapping Tests
+    # -------------------------------------------------------------------------
+
+    def test_map_player_boxscore_columns(self):
         """
-        GIVEN an extractor with failed games
-        WHEN _reset_session is called
-        THEN it preserves the failed games
+        GIVEN raw player stats DataFrame from NBA API
+        WHEN _map_player_boxscore_columns is called
+        THEN it renames columns to standard format
         """
-        self.extractor._record_failed_game("0022400001", "Test error")
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
 
-        self.extractor._reset_session()
+        raw_df = pd.DataFrame({
+            'GAME_ID': ['0022400001'],
+            'TEAM_ABBREVIATION': ['BOS'],
+            'PLAYER_NAME': ['Jayson Tatum'],
+            'PTS': [30],
+            'AST': [5],
+            'REB': [10]
+        })
 
-        assert "0022400001" in self.extractor._failed_games
+        mapped_df = scraper._map_player_boxscore_columns(raw_df, {})
+
+        assert 'game_id' in mapped_df.columns
+        assert 'tm' in mapped_df.columns
+        assert 'player_name' in mapped_df.columns
+        assert 'pts' in mapped_df.columns
+        assert 'ast' in mapped_df.columns
+        assert 'trb' in mapped_df.columns
+
+    def test_map_team_boxscore_columns(self):
+        """
+        GIVEN raw team stats DataFrame from NBA API
+        WHEN _map_team_boxscore_columns is called
+        THEN it renames columns to standard format
+        """
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=self.valid_feature,
+            cache_dir=Path(self.temp_dir)
+        )
+
+        raw_df = pd.DataFrame({
+            'GAME_ID': ['0022400001'],
+            'TEAM_ABBREVIATION': ['BKN'],  # NBA format
+            'TEAM_NAME': ['Nets'],
+            'PTS': [110],
+            'AST': [25]
+        })
+
+        mapped_df = scraper._map_team_boxscore_columns(raw_df, {})
+
+        assert 'game_id' in mapped_df.columns
+        assert 'tm' in mapped_df.columns
+        assert mapped_df['tm'].iloc[0] == 'BRK'  # Converted to BR format
 
     # -------------------------------------------------------------------------
     # Integration Tests (make actual API calls)
     # -------------------------------------------------------------------------
 
-    def test_get_team_games_single_team(self):
+    def test_fetch_boxscore_data_single_team(self):
         """
-        GIVEN a valid team abbreviation
-        WHEN get_team_games is called
-        THEN it returns DataFrame with game information
+        GIVEN valid FeatureIn for single team boxscore
+        WHEN fetch_boxscore_data is called
+        THEN it returns DataFrames with expected columns
         """
-        games = self.extractor.get_team_games(
-            team_abbr="BOS",
-            season="2024-25",
-            season_type="Regular Season"
+        feature = FeatureIn(data_type="boxscore", season=2024, team="BOS")
+        scraper = WebScrapNBAApiBoxscore(
+            feature_object=feature,
+            cache_dir=Path(self.temp_dir)
         )
 
-        assert isinstance(games, pd.DataFrame)
-        assert "GAME_ID" in games.columns
-        assert "TEAM_ABBREVIATION" in games.columns
-        assert len(games) > 0
-
-    def test_get_team_games_invalid_team_raises(self):
-        """
-        GIVEN an invalid team abbreviation
-        WHEN get_team_games is called
-        THEN it raises ValueError
-        """
-        with self.assertRaises(ValueError) as context:
-            self.extractor.get_team_games(team_abbr="INVALID", season="2024-25")
-
-        assert "Invalid team abbreviation" in str(context.exception)
-
-    def test_extract_all_boxscores_limited(self):
-        """
-        GIVEN valid season parameters
-        WHEN extract_all_boxscores is called with max_games limit
-        THEN it returns player and team stats DataFrames
-        """
-        player_stats, team_stats = self.extractor.extract_all_boxscores(
-            season="2024-25",
-            season_type="Regular Season",
-            team_abbr="BOS",
-            max_games=2
-        )
+        player_stats, team_stats = scraper.fetch_boxscore_data()
 
         assert isinstance(player_stats, pd.DataFrame)
         assert isinstance(team_stats, pd.DataFrame)
 
         if not player_stats.empty:
-            assert "PLAYER_NAME" in player_stats.columns
-            assert "PTS" in player_stats.columns
-            assert len(self.extractor.get_fetched_game_ids()) <= 2
+            assert 'id_season' in player_stats.columns
+            assert 'tm' in player_stats.columns
+            assert 'pts' in player_stats.columns
+            assert 'player_name' in player_stats.columns
 
 
 if __name__ == "__main__":

@@ -1,52 +1,41 @@
 """
-NBA Boxscore Extractor - Production Ready
-Extract player boxscore data for NBA games using nba_api.
-Iterates team-by-team to avoid G-League data contamination.
+Class that fetches NBA boxscore data from the official NBA API (stats.nba.com)
+using the nba_api Python package.
+
+This class follows the same patterns as WebScrapNBAApi for consistency
+within the basketball_reference_webscrapper package.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 import gc
 import json
-import logging
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import pandas as pd
+import importlib_resources
+import yaml
+
 from nba_api.stats.endpoints import boxscoretraditionalv2, leaguegamefinder
 from nba_api.stats.static import teams
 
-
-# Logger setup
-def get_logger(name: str, log_level: str = "INFO") -> logging.Logger:
-    """
-    Create and configure a logger instance.
-
-    Args:
-        name (str): Logger name
-        log_level (str): Logging level (DEBUG, INFO, WARNING, ERROR)
-
-    Returns:
-        logging.Logger: Configured logger instance
-    """
-    logger = logging.getLogger(name)
-    if not logger.handlers:
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-    logger.setLevel(getattr(logging, log_level.upper()))
-    return logger
-
+from basketball_reference_webscrapper.data_models.feature_model import FeatureIn
+from basketball_reference_webscrapper.utils.logs import get_logger
 
 logger = get_logger("NBA_BOXSCORE_EXTRACTOR", log_level="INFO")
 
 
 # NBA Teams only (excludes G-League)
 NBA_TEAMS: List[Dict] = teams.get_teams()
+
+# Team abbreviation mapping (NBA API to Basketball Reference format)
+TEAM_ABBREV_MAPPING: Dict[str, str] = {
+    'BKN': 'BRK',  # Brooklyn Nets
+    'PHX': 'PHO',  # Phoenix Suns
+    'CHA': 'CHO',  # Charlotte Hornets
+}
 
 
 @dataclass
@@ -65,9 +54,9 @@ class FailedGameRecord:
 
 
 @dataclass
-class NBABoxscoreExtractor:
+class WebScrapNBAApiBoxscore:
     """
-    Extract NBA boxscore data with production-ready error handling.
+    Class that fetches NBA boxscore data from the official NBA API.
 
     This class provides robust NBA boxscore extraction with:
     - Team-by-team iteration to ensure only NBA games (no G-League)
@@ -75,410 +64,121 @@ class NBABoxscoreExtractor:
     - Periodic session reset to avoid connection exhaustion
     - Caching system for failed games with retry capability
 
+    Follows the same interface pattern as WebScrapNBAApi for consistency.
+
     Attributes:
-        base_delay (float): Base delay between API calls in seconds
-        rate_limit_wait (float): Wait time in seconds when rate limited (default 5 minutes)
-        batch_size (int): Number of requests before forcing a session reset
-        batch_cooldown (float): Cooldown time in seconds between batches
-        cache_dir (Path): Directory for storing failed games cache
+        feature_object (FeatureIn): Input feature object containing data_type, season, and team
     """
 
-    base_delay: float = 0.6
-    rate_limit_wait: float = 300.0  # 5 minutes
-    batch_size: int = 500  # Reset session every 500 requests
-    batch_cooldown: float = 60.0  # 1 minute cooldown between batches
-    cache_dir: Path = field(default_factory=lambda: Path("./cache"))
+    def __init__(
+        self,
+        feature_object: FeatureIn,
+        base_delay: float = 0.6,
+        batch_size: int = 500,
+        batch_cooldown: float = 60.0,
+        cache_dir: Optional[Path] = None
+    ) -> None:
+        """
+        Initialize the NBA Boxscore extractor.
 
-    def __post_init__(self) -> None:
-        """Initialize extractor with state tracking."""
+        Args:
+            feature_object (FeatureIn): Feature object with data_type, season, and team
+            base_delay (float): Delay between API calls in seconds
+            batch_size (int): Number of requests before forcing a session reset
+            batch_cooldown (float): Cooldown time in seconds between batches
+            cache_dir (Optional[Path]): Directory for storing failed games cache
+        """
+        self.feature_object = feature_object
+        self.base_delay = base_delay
+        self.batch_size = batch_size
+        self.batch_cooldown = batch_cooldown
+        self.cache_dir = cache_dir or Path("./cache")
+
+        # State tracking
         self._fetched_game_ids: Set[str] = set()
         self._failed_games: Dict[str, FailedGameRecord] = {}
         self._request_count: int = 0
+
+        # Team mapping for ID lookups
+        self.team_mapping = self._get_team_mapping()
 
         # Ensure cache directory exists
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(
-            "NBABoxscoreExtractor initialized with base_delay=%.2fs, batch_size=%d",
+            "WebScrapNBAApiBoxscore initialized with base_delay=%.2fs, batch_size=%d",
             self.base_delay, self.batch_size
         )
 
-    def _reset_session(self) -> None:
+    def fetch_boxscore_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Reset the HTTP session by reloading nba_api modules.
+        Main method to fetch NBA boxscore data from the official API.
 
-        The nba_api library manages its own internal HTTP session.
-        To truly reset connections, we must reload the modules themselves.
-        This forces Python to re-initialize all module-level state including
-        any cached sessions or connection pools.
-        """
-        import importlib
-        import nba_api.stats.endpoints.boxscoretraditionalv2
-        import nba_api.stats.endpoints.leaguegamefinder
-        import nba_api.stats.library.http
-
-        # Reload the http library first (handles actual requests)
-        importlib.reload(nba_api.stats.library.http)
-
-        # Reload the endpoint modules
-        importlib.reload(nba_api.stats.endpoints.boxscoretraditionalv2)
-        importlib.reload(nba_api.stats.endpoints.leaguegamefinder)
-
-        # Force garbage collection to clean up old connections
-        gc.collect()
-
-        # Reset request counter
-        self._request_count = 0
-
-        logger.info("Session reset - nba_api modules reloaded, fresh connections established")
-
-    def _check_and_reset_session(self) -> None:
-        """
-        Check if session reset is needed based on request count.
-
-        Called before each API request to ensure connection health.
-        """
-        self._request_count += 1
-
-        if self._request_count >= self.batch_size:
-            logger.info(
-                "Reached %d requests - initiating batch cooldown and session reset",
-                self._request_count
-            )
-            time.sleep(self.batch_cooldown)
-            self._reset_session()
-
-    def get_nba_team_abbreviations(self) -> List[str]:
-        """
-        Get list of all NBA team abbreviations (excludes G-League).
+        This is the primary entry point, following the same pattern as
+        WebScrapNBAApi.fetch_nba_api_data().
 
         Returns:
-            List[str]: List of 30 NBA team abbreviations
+            Tuple[pd.DataFrame, pd.DataFrame]: (player_stats_df, team_stats_df)
+                with columns matching the expected format
         """
-        return [team["abbreviation"] for team in NBA_TEAMS]
+        # Input validation
+        self._get_data_type_validation()
+        self._get_season_validation()
 
-    def get_team_games(
-        self,
-        team_abbr: str,
-        season: str = "2023-24",
-        season_type: str = "Regular Season"
-    ) -> pd.DataFrame:
-        """
-        Get all games for a specific team.
+        # Load configuration
+        config = self._load_config()
 
-        Args:
-            team_abbr (str): Team abbreviation (e.g., 'LAL', 'BOS')
-            season (str): Season in format 'YYYY-YY' (e.g., '2023-24')
-            season_type (str): 'Regular Season', 'Playoffs', 'All Star'
+        # Load team reference data
+        team_city_refdata = self._load_team_refdata()
 
-        Returns:
-            pd.DataFrame: DataFrame with game information
+        # Validate team input
+        self._get_team_list_values_validation(list(team_city_refdata["team_abrev"]))
 
-        Raises:
-            ValueError: If team abbreviation is invalid
-        """
-        team_id = self._get_team_id_from_abbr(team_abbr)
-        if team_id is None:
-            raise ValueError(f"Invalid team abbreviation: {team_abbr}")
+        # Filter teams based on input
+        teams_to_fetch = self._filter_teams(team_city_refdata)
 
-        try:
-            # Check if session reset is needed
-            self._check_and_reset_session()
-
-            gamefinder = leaguegamefinder.LeagueGameFinder(
-                team_id_nullable=team_id,
-                season_nullable=season,
-                season_type_nullable=season_type
-            )
-            time.sleep(self.base_delay)
-
-            games = gamefinder.get_data_frames()[0]
-            logger.info("Team %s: found %d games", team_abbr, len(games))
-
-            return games
-
-        except Exception as e:
-            if self._is_rate_limit_error(e):
-                logger.warning(
-                    "Rate limit/connection issue for %s - resetting session and retrying...",
-                    team_abbr
-                )
-                self._reset_session()
-                time.sleep(self.batch_cooldown)
-                return self.get_team_games(team_abbr, season, season_type)
-            raise
-
-    def get_all_season_games(
-        self,
-        season: str = "2023-24",
-        season_type: str = "Regular Season",
-        team_abbr: Optional[str] = None
-    ) -> pd.DataFrame:
-        """
-        Get all games for the season, iterating team-by-team to ensure NBA-only data.
-
-        Args:
-            season (str): Season in format 'YYYY-YY' (e.g., '2023-24')
-            season_type (str): 'Regular Season', 'Playoffs', 'All Star'
-            team_abbr (Optional[str]): Specific team, or None for all NBA teams
-
-        Returns:
-            pd.DataFrame: DataFrame with all unique games
-        """
-        if team_abbr:
-            # Single team requested
-            return self.get_team_games(team_abbr, season, season_type)
-
-        # All NBA teams - iterate one by one
-        logger.info("Fetching games for all 30 NBA teams, season %s", season)
-        team_abbreviations = self.get_nba_team_abbreviations()
-
-        all_games: List[pd.DataFrame] = []
-        seen_game_ids: Set[str] = set()
-
-        for idx, abbr in enumerate(team_abbreviations, 1):
-            logger.info("Fetching games for team %d/30: %s", idx, abbr)
-
-            try:
-                team_games = self.get_team_games(abbr, season, season_type)
-
-                if team_games.empty:
-                    continue
-
-                # Filter out already seen games
-                new_games = team_games[~team_games["GAME_ID"].isin(seen_game_ids)]
-
-                if not new_games.empty:
-                    all_games.append(new_games)
-                    seen_game_ids.update(new_games["GAME_ID"].tolist())
-                    logger.info(
-                        "Team %s: %d new games added (total unique: %d)",
-                        abbr, len(new_games), len(seen_game_ids)
-                    )
-
-            except Exception as e:
-                logger.error("Error fetching games for team %s: %s", abbr, str(e))
-
-        if all_games:
-            combined = pd.concat(all_games, ignore_index=True)
-            logger.info("Total unique games found: %d", len(combined))
-            return combined
-
-        return pd.DataFrame()
-
-    def get_game_boxscore(
-        self,
-        game_id: str
-    ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
-        """
-        Get player boxscore for a specific game.
-
-        Args:
-            game_id (str): NBA game ID
-
-        Returns:
-            Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
-                (player_stats_df, team_stats_df) or (None, None) on failure
-        """
-        # Skip if already fetched
-        if game_id in self._fetched_game_ids:
-            logger.debug("Game %s already fetched, skipping", game_id)
-            return None, None
-
-        try:
-            # Check if session reset is needed
-            self._check_and_reset_session()
-
-            boxscore = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
-            time.sleep(self.base_delay)
-
-            player_stats = boxscore.get_data_frames()[0]
-            team_stats = boxscore.get_data_frames()[1]
-
-            # Mark as fetched
-            self._fetched_game_ids.add(game_id)
-
-            # Remove from failed games if previously failed
-            if game_id in self._failed_games:
-                del self._failed_games[game_id]
-                logger.info("Game %s succeeded, removed from failed cache", game_id)
-
-            return player_stats, team_stats
-
-        except Exception as e:
-            error_msg = str(e)
-
-            if self._is_rate_limit_error(e):
-                logger.warning(
-                    "Rate limit/connection issue for game %s - resetting session...",
-                    game_id
-                )
-                self._reset_session()
-                time.sleep(self.batch_cooldown)
-                # Retry once after session reset
-                return self._retry_game_boxscore(game_id)
-
-            # Non-rate-limit error - record as failed
-            logger.error("Error fetching boxscore for game %s: %s", game_id, error_msg)
-            self._record_failed_game(game_id, error_msg)
-            return None, None
-
-    def _retry_game_boxscore(
-        self,
-        game_id: str
-    ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
-        """
-        Single retry attempt for a game after session reset.
-
-        Args:
-            game_id (str): NBA game ID
-
-        Returns:
-            Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
-                (player_stats_df, team_stats_df) or (None, None) on failure
-        """
-        try:
-            # Increment request count (session was just reset, so this starts fresh)
-            self._request_count += 1
-
-            boxscore = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
-            time.sleep(self.base_delay)
-
-            player_stats = boxscore.get_data_frames()[0]
-            team_stats = boxscore.get_data_frames()[1]
-
-            self._fetched_game_ids.add(game_id)
-
-            if game_id in self._failed_games:
-                del self._failed_games[game_id]
-
-            logger.info("Game %s succeeded after retry", game_id)
-            return player_stats, team_stats
-
-        except Exception as e:
-            error_msg = str(e)
-            logger.error("Retry failed for game %s: %s", game_id, error_msg)
-            self._record_failed_game(game_id, error_msg)
-            return None, None
-
-    def extract_all_boxscores(
-        self,
-        season: str = "2023-24",
-        season_type: str = "Regular Season",
-        team_abbr: Optional[str] = None,
-        max_games: Optional[int] = None
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Extract boxscores for all games, iterating team-by-team.
-
-        This method ensures only NBA games are fetched (no G-League) by:
-        1. Getting games for each of the 30 NBA teams
-        2. Tracking already-fetched game IDs to avoid duplicates
-
-        Args:
-            season (str): Season in format 'YYYY-YY' (e.g., '2023-24')
-            season_type (str): 'Regular Season', 'Playoffs', 'All Star'
-            team_abbr (Optional[str]): Specific team, or None for all NBA teams
-            max_games (Optional[int]): Maximum number of games to process (None for all)
-
-        Returns:
-            Tuple[pd.DataFrame, pd.DataFrame]: (all_player_stats_df, all_team_stats_df)
-        """
-        # Reset state for fresh extraction
-        self._fetched_game_ids.clear()
-
-        if team_abbr:
-            # Single team mode
-            teams_to_process = [team_abbr]
-        else:
-            # All NBA teams
-            teams_to_process = self.get_nba_team_abbreviations()
+        # Convert season to NBA API format
+        season_str = self._convert_season_format(self.feature_object.season)
 
         logger.info(
-            "Extracting boxscores for %d team(s), season %s",
-            len(teams_to_process), season
+            "Fetching boxscore data for season %s, teams: %s",
+            season_str,
+            "all" if len(teams_to_fetch) == 30 else list(teams_to_fetch["team_abrev"])
         )
 
-        all_player_stats: List[pd.DataFrame] = []
-        all_team_stats: List[pd.DataFrame] = []
-        games_processed = 0
+        # Extract boxscores
+        player_stats, team_stats = self._extract_all_boxscores(
+            teams_to_fetch=list(teams_to_fetch["team_abrev"]),
+            season=season_str,
+            season_type=self._get_season_type()
+        )
 
-        for team_idx, abbr in enumerate(teams_to_process, 1):
-            logger.info(
-                "Processing team %d/%d: %s",
-                team_idx, len(teams_to_process), abbr
-            )
+        if player_stats.empty:
+            logger.warning("No boxscore data was fetched. Returning empty DataFrames.")
+            return pd.DataFrame(), pd.DataFrame()
 
-            # Get games for this team
-            try:
-                team_games = self.get_team_games(abbr, season, season_type)
-            except Exception as e:
-                logger.error("Failed to get games for team %s: %s", abbr, str(e))
-                continue
+        # Add standard columns
+        player_stats["id_season"] = self.feature_object.season
+        team_stats["id_season"] = self.feature_object.season
 
-            if team_games.empty:
-                logger.warning("No games found for team %s", abbr)
-                continue
-
-            # Process each game
-            game_ids = team_games["GAME_ID"].unique()
-
-            for game_id in game_ids:
-                # Check max_games limit
-                if max_games and games_processed >= max_games:
-                    logger.info("Reached max_games limit (%d)", max_games)
-                    break
-
-                # Skip already fetched
-                if game_id in self._fetched_game_ids:
-                    continue
-
-                player_stats, team_stats = self.get_game_boxscore(game_id)
-
-                if player_stats is not None and team_stats is not None:
-                    all_player_stats.append(player_stats)
-                    all_team_stats.append(team_stats)
-                    games_processed += 1
-
-                    if games_processed % 10 == 0:
-                        logger.info("Progress: %d games processed", games_processed)
-
-            # Check max_games limit after team
-            if max_games and games_processed >= max_games:
-                break
-
-        success_count = len(all_player_stats)
-        fail_count = len(self._failed_games)
+        # Map column names to standard format
+        player_stats = self._map_player_boxscore_columns(player_stats, config)
+        team_stats = self._map_team_boxscore_columns(team_stats, config)
 
         logger.info(
-            "Extraction complete: %d succeeded, %d failed",
-            success_count, fail_count
+            "Successfully fetched boxscore data: %d player records, %d team records",
+            len(player_stats), len(team_stats)
         )
 
-        if all_player_stats:
-            combined_player_stats = pd.concat(all_player_stats, ignore_index=True)
-            combined_team_stats = pd.concat(all_team_stats, ignore_index=True)
-            return combined_player_stats, combined_team_stats
+        return player_stats, team_stats
 
-        return pd.DataFrame(), pd.DataFrame()
-
-    def retry_failed_games(
-        self,
-        cache_file: Optional[str] = None
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def retry_failed_games(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Retry fetching boxscores for previously failed games.
-
-        Args:
-            cache_file (Optional[str]): Path to failed games cache file.
-                If None, uses in-memory failed games.
 
         Returns:
             Tuple[pd.DataFrame, pd.DataFrame]: (player_stats_df, team_stats_df) for recovered games
         """
-        if cache_file:
-            self.load_failed_games_cache(cache_file)
-
         if not self._failed_games:
             logger.info("No failed games to retry")
             return pd.DataFrame(), pd.DataFrame()
@@ -496,7 +196,7 @@ class NBABoxscoreExtractor:
         for game_id in failed_game_ids:
             logger.info("Retrying game %s", game_id)
 
-            player_stats, team_stats = self.get_game_boxscore(game_id)
+            player_stats, team_stats = self._get_game_boxscore(game_id)
 
             if player_stats is not None and team_stats is not None:
                 all_player_stats.append(player_stats)
@@ -510,12 +210,36 @@ class NBABoxscoreExtractor:
         )
 
         if all_player_stats:
-            return (
-                pd.concat(all_player_stats, ignore_index=True),
-                pd.concat(all_team_stats, ignore_index=True)
-            )
+            player_df = pd.concat(all_player_stats, ignore_index=True)
+            team_df = pd.concat(all_team_stats, ignore_index=True)
+
+            # Add season column
+            player_df["id_season"] = self.feature_object.season
+            team_df["id_season"] = self.feature_object.season
+
+            return player_df, team_df
 
         return pd.DataFrame(), pd.DataFrame()
+
+    def get_failed_games_summary(self) -> pd.DataFrame:
+        """
+        Get a summary DataFrame of all failed games.
+
+        Returns:
+            pd.DataFrame: Summary of failed games with columns:
+                game_id, failure_reason, timestamp
+        """
+        if not self._failed_games:
+            return pd.DataFrame(columns=["game_id", "failure_reason", "timestamp"])
+
+        return pd.DataFrame([
+            {
+                "game_id": r.game_id,
+                "failure_reason": r.failure_reason,
+                "timestamp": r.timestamp
+            }
+            for r in self._failed_games.values()
+        ])
 
     def save_failed_games_cache(self, filename: Optional[str] = None) -> str:
         """
@@ -525,7 +249,7 @@ class NBABoxscoreExtractor:
             filename (Optional[str]): Output filename. If None, generates timestamped name.
 
         Returns:
-            str: Path to the saved cache file
+            str: Path to the saved cache file, or empty string if no failures
         """
         if not self._failed_games:
             logger.info("No failed games to cache")
@@ -581,25 +305,6 @@ class NBABoxscoreExtractor:
         logger.info("Loaded %d failed games from %s", len(cache_data), filepath)
         return len(cache_data)
 
-    def get_failed_games_summary(self) -> pd.DataFrame:
-        """
-        Get a summary DataFrame of all failed games.
-
-        Returns:
-            pd.DataFrame: Summary of failed games
-        """
-        if not self._failed_games:
-            return pd.DataFrame(columns=["game_id", "failure_reason", "timestamp"])
-
-        return pd.DataFrame([
-            {
-                "game_id": r.game_id,
-                "failure_reason": r.failure_reason,
-                "timestamp": r.timestamp
-            }
-            for r in self._failed_games.values()
-        ])
-
     def get_fetched_game_ids(self) -> Set[str]:
         """
         Get set of already fetched game IDs.
@@ -618,56 +323,254 @@ class NBABoxscoreExtractor:
         """
         return self._request_count
 
-    def save_to_csv(
+    # -------------------------------------------------------------------------
+    # Private Methods - Extraction Logic
+    # -------------------------------------------------------------------------
+
+    def _extract_all_boxscores(
         self,
-        player_stats_df: pd.DataFrame,
-        team_stats_df: pd.DataFrame,
-        prefix: str = "nba_boxscore"
-    ) -> Tuple[str, str]:
+        teams_to_fetch: List[str],
+        season: str,
+        season_type: str
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Save dataframes to CSV files.
+        Extract boxscores for all games, iterating team-by-team.
 
         Args:
-            player_stats_df (pd.DataFrame): Player statistics
-            team_stats_df (pd.DataFrame): Team statistics
-            prefix (str): Prefix for output files
+            teams_to_fetch (List[str]): List of team abbreviations to process
+            season (str): Season in format 'YYYY-YY'
+            season_type (str): 'Regular Season', 'Playoffs', etc.
 
         Returns:
-            Tuple[str, str]: (player_file_path, team_file_path)
+            Tuple[pd.DataFrame, pd.DataFrame]: (player_stats_df, team_stats_df)
         """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Reset state for fresh extraction
+        self._fetched_game_ids.clear()
+        self._failed_games.clear()
 
-        player_file = f"{prefix}_players_{timestamp}.csv"
-        team_file = f"{prefix}_teams_{timestamp}.csv"
+        logger.info("Extracting boxscores for %d team(s)", len(teams_to_fetch))
 
-        player_stats_df.to_csv(player_file, index=False)
-        team_stats_df.to_csv(team_file, index=False)
+        all_player_stats: List[pd.DataFrame] = []
+        all_team_stats: List[pd.DataFrame] = []
 
-        logger.info("Data saved:")
-        logger.info("  - Player stats: %s (%d rows)", player_file, len(player_stats_df))
-        logger.info("  - Team stats: %s (%d rows)", team_file, len(team_stats_df))
+        for team_idx, team_abbr in enumerate(teams_to_fetch, 1):
+            logger.info("Processing team %d/%d: %s", team_idx, len(teams_to_fetch), team_abbr)
 
-        return player_file, team_file
+            # Get games for this team
+            try:
+                team_games = self._get_team_games(team_abbr, season, season_type)
+            except Exception as e:
+                logger.error("Failed to get games for team %s: %s", team_abbr, str(e))
+                continue
 
-    # -------------------------------------------------------------------------
-    # Private Methods
-    # -------------------------------------------------------------------------
+            if team_games.empty:
+                logger.warning("No games found for team %s", team_abbr)
+                continue
 
-    def _get_team_id_from_abbr(self, team_abbr: str) -> Optional[int]:
+            # Process each game
+            game_ids = team_games["GAME_ID"].unique()
+
+            for game_id in game_ids:
+                # Skip already fetched
+                if game_id in self._fetched_game_ids:
+                    continue
+
+                player_stats, team_stats = self._get_game_boxscore(game_id)
+
+                if player_stats is not None and team_stats is not None:
+                    all_player_stats.append(player_stats)
+                    all_team_stats.append(team_stats)
+
+                    if len(self._fetched_game_ids) % 50 == 0:
+                        logger.info("Progress: %d games processed", len(self._fetched_game_ids))
+
+        success_count = len(all_player_stats)
+        fail_count = len(self._failed_games)
+
+        logger.info("Extraction complete: %d succeeded, %d failed", success_count, fail_count)
+
+        if all_player_stats:
+            combined_player = pd.concat(all_player_stats, ignore_index=True)
+            combined_team = pd.concat(all_team_stats, ignore_index=True)
+            return combined_player, combined_team
+
+        return pd.DataFrame(), pd.DataFrame()
+
+    def _get_team_games(
+        self,
+        team_abbr: str,
+        season: str,
+        season_type: str
+    ) -> pd.DataFrame:
         """
-        Get team ID from abbreviation.
+        Get all games for a specific team.
 
         Args:
             team_abbr (str): Team abbreviation
+            season (str): Season in format 'YYYY-YY'
+            season_type (str): 'Regular Season', 'Playoffs', etc.
 
         Returns:
-            Optional[int]: Team ID or None if not found
+            pd.DataFrame: DataFrame with game information
         """
-        matching_teams = [
-            t for t in NBA_TEAMS
-            if t["abbreviation"] == team_abbr
-        ]
-        return matching_teams[0]["id"] if matching_teams else None
+        # Convert to NBA API abbreviation if needed
+        nba_abbr = self._convert_team_abbrev_to_nba(team_abbr)
+        team_id = self._get_nba_team_id(nba_abbr)
+
+        if team_id is None:
+            logger.warning("Could not find NBA team ID for: %s", team_abbr)
+            return pd.DataFrame()
+
+        try:
+            self._check_and_reset_session()
+
+            gamefinder = leaguegamefinder.LeagueGameFinder(
+                team_id_nullable=team_id,
+                season_nullable=season,
+                season_type_nullable=season_type
+            )
+            time.sleep(self.base_delay)
+
+            games = gamefinder.get_data_frames()[0]
+            logger.info("Team %s: found %d games", team_abbr, len(games))
+
+            return games
+
+        except Exception as e:
+            if self._is_rate_limit_error(e):
+                logger.warning(
+                    "Rate limit/connection issue for %s - resetting session and retrying...",
+                    team_abbr
+                )
+                self._reset_session()
+                time.sleep(self.batch_cooldown)
+                return self._get_team_games(team_abbr, season, season_type)
+            raise
+
+    def _get_game_boxscore(
+        self,
+        game_id: str
+    ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+        """
+        Get player and team boxscore for a specific game.
+
+        Args:
+            game_id (str): NBA game ID
+
+        Returns:
+            Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+                (player_stats, team_stats) or (None, None) on failure
+        """
+        if game_id in self._fetched_game_ids:
+            return None, None
+
+        try:
+            self._check_and_reset_session()
+
+            boxscore = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
+            time.sleep(self.base_delay)
+
+            player_stats = boxscore.get_data_frames()[0]
+            team_stats = boxscore.get_data_frames()[1]
+
+            self._fetched_game_ids.add(game_id)
+
+            # Remove from failed games if previously failed
+            if game_id in self._failed_games:
+                del self._failed_games[game_id]
+
+            return player_stats, team_stats
+
+        except Exception as e:
+            error_msg = str(e)
+
+            if self._is_rate_limit_error(e):
+                logger.warning(
+                    "Rate limit/connection issue for game %s - resetting session...",
+                    game_id
+                )
+                self._reset_session()
+                time.sleep(self.batch_cooldown)
+                return self._retry_single_game_boxscore(game_id)
+
+            logger.error("Error fetching boxscore for game %s: %s", game_id, error_msg)
+            self._record_failed_game(game_id, error_msg)
+            return None, None
+
+    def _retry_single_game_boxscore(
+        self,
+        game_id: str
+    ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+        """
+        Single retry attempt for a game after session reset.
+
+        Args:
+            game_id (str): NBA game ID
+
+        Returns:
+            Tuple: (player_stats, team_stats) or (None, None) on failure
+        """
+        try:
+            self._request_count += 1
+
+            boxscore = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
+            time.sleep(self.base_delay)
+
+            player_stats = boxscore.get_data_frames()[0]
+            team_stats = boxscore.get_data_frames()[1]
+
+            self._fetched_game_ids.add(game_id)
+
+            if game_id in self._failed_games:
+                del self._failed_games[game_id]
+
+            logger.info("Game %s succeeded after retry", game_id)
+            return player_stats, team_stats
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error("Retry failed for game %s: %s", game_id, error_msg)
+            self._record_failed_game(game_id, error_msg)
+            return None, None
+
+    # -------------------------------------------------------------------------
+    # Private Methods - Session Management
+    # -------------------------------------------------------------------------
+
+    def _reset_session(self) -> None:
+        """
+        Reset the HTTP session by reloading nba_api modules.
+
+        The nba_api library manages its own internal HTTP session.
+        To truly reset connections, we must reload the modules themselves.
+        """
+        import importlib
+        import nba_api.stats.endpoints.boxscoretraditionalv2
+        import nba_api.stats.endpoints.leaguegamefinder
+        import nba_api.stats.library.http
+
+        importlib.reload(nba_api.stats.library.http)
+        importlib.reload(nba_api.stats.endpoints.boxscoretraditionalv2)
+        importlib.reload(nba_api.stats.endpoints.leaguegamefinder)
+
+        gc.collect()
+        self._request_count = 0
+
+        logger.info("Session reset - nba_api modules reloaded")
+
+    def _check_and_reset_session(self) -> None:
+        """
+        Check if session reset is needed based on request count.
+        """
+        self._request_count += 1
+
+        if self._request_count >= self.batch_size:
+            logger.info(
+                "Reached %d requests - initiating batch cooldown and session reset",
+                self._request_count
+            )
+            time.sleep(self.batch_cooldown)
+            self._reset_session()
 
     def _is_rate_limit_error(self, error: Exception) -> bool:
         """
@@ -680,7 +583,6 @@ class NBABoxscoreExtractor:
             bool: True if rate limit or connection related, False otherwise
         """
         error_str = str(error).lower()
-        # Include connection-related errors that indicate session exhaustion
         rate_limit_indicators = [
             "429",
             "rate limit",
@@ -713,73 +615,338 @@ class NBABoxscoreExtractor:
         )
         logger.warning("Game %s added to failed cache", game_id)
 
+    # -------------------------------------------------------------------------
+    # Private Methods - Team Mapping
+    # -------------------------------------------------------------------------
 
-def main() -> None:
-    """Example usage demonstrating all features."""
+    def _get_team_mapping(self) -> Dict[str, Dict]:
+        """
+        Create mapping between team abbreviations and NBA API team IDs.
 
-    extractor = NBABoxscoreExtractor(
-        base_delay=0.6,
-        rate_limit_wait=300.0,  # 5 minutes (fallback)
-        batch_size=500,  # Reset session every 500 requests
-        batch_cooldown=60.0,  # 1 minute cooldown between batches
-        cache_dir=Path("./nba_cache")
-    )
+        Returns:
+            Dict: Mapping dictionary with team IDs
+        """
+        return {
+            'ATL': {'team_id': 1610612737},
+            'BOS': {'team_id': 1610612738},
+            'BRK': {'team_id': 1610612751},
+            'CHA': {'team_id': 1610612766},
+            'CHI': {'team_id': 1610612741},
+            'CHO': {'team_id': 1610612766},
+            'CLE': {'team_id': 1610612739},
+            'DAL': {'team_id': 1610612742},
+            'DEN': {'team_id': 1610612743},
+            'DET': {'team_id': 1610612765},
+            'GSW': {'team_id': 1610612744},
+            'HOU': {'team_id': 1610612745},
+            'IND': {'team_id': 1610612754},
+            'LAC': {'team_id': 1610612746},
+            'LAL': {'team_id': 1610612747},
+            'MEM': {'team_id': 1610612763},
+            'MIA': {'team_id': 1610612748},
+            'MIL': {'team_id': 1610612749},
+            'MIN': {'team_id': 1610612750},
+            'NOP': {'team_id': 1610612740},
+            'NYK': {'team_id': 1610612752},
+            'OKC': {'team_id': 1610612760},
+            'ORL': {'team_id': 1610612753},
+            'PHI': {'team_id': 1610612755},
+            'PHO': {'team_id': 1610612756},
+            'POR': {'team_id': 1610612757},
+            'SAC': {'team_id': 1610612758},
+            'SAS': {'team_id': 1610612759},
+            'TOR': {'team_id': 1610612761},
+            'UTA': {'team_id': 1610612762},
+            'WAS': {'team_id': 1610612764},
+        }
 
-    print("\n" + "=" * 60)
-    print("Available NBA Teams (30 teams, no G-League)")
-    print("=" * 60)
-    print(extractor.get_nba_team_abbreviations())
+    def _get_nba_team_id(self, team_abbr: str) -> Optional[int]:
+        """
+        Get NBA API team ID from team abbreviation.
 
-    print("\n" + "=" * 60)
-    print("Example 1: Extract boxscores for full season (limited to 10 games)")
-    print("=" * 60)
+        Args:
+            team_abbr (str): Team abbreviation
 
-    try:
-        player_stats, team_stats = extractor.extract_all_boxscores(
-            season="2024-25",
-            season_type="Regular Season",
-            team_abbr=None,  # All NBA teams
-            max_games=10
-        )
+        Returns:
+            Optional[int]: NBA team ID or None if not found
+        """
+        return self.team_mapping.get(team_abbr, {}).get('team_id')
 
-        if not player_stats.empty:
-            print(f"\nPlayer stats shape: {player_stats.shape}")
-            print(f"Unique games fetched: {len(extractor.get_fetched_game_ids())}")
+    def _convert_team_abbrev_to_nba(self, br_abbrev: str) -> str:
+        """
+        Convert Basketball Reference abbreviation to NBA API abbreviation.
 
-            display_cols = ["GAME_ID", "TEAM_ABBREVIATION", "PLAYER_NAME", "MIN", "PTS", "REB", "AST"]
-            available_cols = [c for c in display_cols if c in player_stats.columns]
-            print("\nSample player stats:")
-            print(player_stats[available_cols].head(10))
+        Args:
+            br_abbrev (str): Basketball Reference team abbreviation
 
-            extractor.save_to_csv(player_stats, team_stats)
+        Returns:
+            str: NBA API team abbreviation
+        """
+        # Reverse mapping
+        br_to_nba = {v: k for k, v in TEAM_ABBREV_MAPPING.items()}
+        return br_to_nba.get(br_abbrev, br_abbrev)
 
-        print("\n" + "=" * 60)
-        print("Failed games handling")
-        print("=" * 60)
+    def _convert_team_abbrev_to_br(self, nba_abbrev: str) -> str:
+        """
+        Convert NBA API abbreviation to Basketball Reference abbreviation.
 
-        failed_summary = extractor.get_failed_games_summary()
-        if not failed_summary.empty:
-            print(f"Failed games: {len(failed_summary)}")
-            print(failed_summary)
+        Args:
+            nba_abbrev (str): NBA API team abbreviation
 
-            cache_file = extractor.save_failed_games_cache()
-            print(f"Failed games cached to: {cache_file}")
+        Returns:
+            str: Basketball Reference team abbreviation
+        """
+        return TEAM_ABBREV_MAPPING.get(nba_abbrev, nba_abbrev)
 
-            print("\nRetrying failed games...")
-            recovered_players, recovered_teams = extractor.retry_failed_games()
-            if not recovered_players.empty:
-                print(f"Recovered {len(recovered_players)} player records")
+    # -------------------------------------------------------------------------
+    # Private Methods - Column Mapping
+    # -------------------------------------------------------------------------
+
+    def _map_player_boxscore_columns(
+        self,
+        df: pd.DataFrame,
+        config: Dict
+    ) -> pd.DataFrame:
+        """
+        Map NBA API player boxscore columns to standard format.
+
+        Args:
+            df (pd.DataFrame): Raw player stats from NBA API
+            config (Dict): Configuration dictionary
+
+        Returns:
+            pd.DataFrame: DataFrame with standardized column names
+        """
+        column_mapping = {
+            'GAME_ID': 'game_id',
+            'TEAM_ID': 'team_id',
+            'TEAM_ABBREVIATION': 'tm',
+            'TEAM_CITY': 'team_city',
+            'PLAYER_ID': 'player_id',
+            'PLAYER_NAME': 'player_name',
+            'NICKNAME': 'nickname',
+            'START_POSITION': 'start_position',
+            'COMMENT': 'comment',
+            'MIN': 'min',
+            'FGM': 'fg',
+            'FGA': 'fga',
+            'FG_PCT': 'fg_pct',
+            'FG3M': 'fg3',
+            'FG3A': 'fg3a',
+            'FG3_PCT': 'fg3_pct',
+            'FTM': 'ft',
+            'FTA': 'fta',
+            'FT_PCT': 'ft_pct',
+            'OREB': 'orb',
+            'DREB': 'drb',
+            'REB': 'trb',
+            'AST': 'ast',
+            'STL': 'stl',
+            'BLK': 'blk',
+            'TO': 'tov',
+            'PF': 'pf',
+            'PTS': 'pts',
+            'PLUS_MINUS': 'plus_minus',
+        }
+
+        df = df.rename(columns=column_mapping)
+
+        # Convert team abbreviation to BR format
+        if 'tm' in df.columns:
+            df['tm'] = df['tm'].apply(self._convert_team_abbrev_to_br)
+
+        return df
+
+    def _map_team_boxscore_columns(
+        self,
+        df: pd.DataFrame,
+        config: Dict
+    ) -> pd.DataFrame:
+        """
+        Map NBA API team boxscore columns to standard format.
+
+        Args:
+            df (pd.DataFrame): Raw team stats from NBA API
+            config (Dict): Configuration dictionary
+
+        Returns:
+            pd.DataFrame: DataFrame with standardized column names
+        """
+        column_mapping = {
+            'GAME_ID': 'game_id',
+            'TEAM_ID': 'team_id',
+            'TEAM_ABBREVIATION': 'tm',
+            'TEAM_CITY': 'team_city',
+            'TEAM_NAME': 'team_name',
+            'MIN': 'min',
+            'FGM': 'fg',
+            'FGA': 'fga',
+            'FG_PCT': 'fg_pct',
+            'FG3M': 'fg3',
+            'FG3A': 'fg3a',
+            'FG3_PCT': 'fg3_pct',
+            'FTM': 'ft',
+            'FTA': 'fta',
+            'FT_PCT': 'ft_pct',
+            'OREB': 'orb',
+            'DREB': 'drb',
+            'REB': 'trb',
+            'AST': 'ast',
+            'STL': 'stl',
+            'BLK': 'blk',
+            'TO': 'tov',
+            'PF': 'pf',
+            'PTS': 'pts',
+            'PLUS_MINUS': 'plus_minus',
+        }
+
+        df = df.rename(columns=column_mapping)
+
+        # Convert team abbreviation to BR format
+        if 'tm' in df.columns:
+            df['tm'] = df['tm'].apply(self._convert_team_abbrev_to_br)
+
+        return df
+
+    # -------------------------------------------------------------------------
+    # Private Methods - Validation (matching WebScrapNBAApi pattern)
+    # -------------------------------------------------------------------------
+
+    def _get_data_type_validation(self) -> None:
+        """Validate data_type input."""
+        valid_types = ["boxscore", "boxscore_player", "boxscore_team"]
+
+        if self.feature_object.data_type is not None:
+            if str(self.feature_object.data_type) not in valid_types:
+                raise ValueError(
+                    f"data_type value '{self.feature_object.data_type}' is not supported. "
+                    f"Accepted values are: {valid_types}. "
+                    "Read documentation for more details."
+                )
         else:
-            print("No failed games - all extractions succeeded!")
+            raise ValueError(
+                "data_type is a required argument. "
+                f"Accepted values are: {valid_types}. "
+                "Read documentation for more details."
+            )
 
-    except Exception as e:
-        logger.error("Error in main execution: %s", str(e))
-        raise
+    def _get_season_validation(self) -> None:
+        """Validate season input."""
+        if isinstance(self.feature_object.season, int):
+            if self.feature_object.season < 1999:
+                raise ValueError(
+                    "season value provided is a year not supported by the package. "
+                    "It should be between 2000 and current NBA season."
+                )
+        else:
+            raise ValueError(
+                "season is a required argument and should be an int value between 2000 "
+                "and current NBA season."
+            )
 
-    print("\n" + "=" * 60)
-    print("Extraction complete!")
-    print("=" * 60)
+    def _get_team_list_values_validation(self, team_abbrev_list: List[str]) -> None:
+        """
+        Validate team input.
 
+        Args:
+            team_abbrev_list (List[str]): List of valid team abbreviations
+        """
+        team = self.feature_object.team
 
-if __name__ == "__main__":
-    main()
+        if isinstance(team, list) and all(isinstance(s, str) for s in team):
+            if not set(team).issubset(team_abbrev_list):
+                raise ValueError(
+                    "team list arg provided is not accepted. "
+                    "Value needs to be 'all' or a NBA team abbreviation "
+                    "such as BOS for Boston Celtics."
+                )
+        elif isinstance(team, str):
+            if team != "all" and team not in team_abbrev_list:
+                raise ValueError(
+                    "team arg provided is not accepted. "
+                    "Value needs to be 'all' or a NBA team abbreviation "
+                    "such as BOS for Boston Celtics."
+                )
+        else:
+            raise ValueError(
+                "team args should be a string or a list of string. "
+                "Value needs to be NBA team abbreviation such as BOS for Boston Celtics."
+            )
+
+    def _get_season_type(self) -> str:
+        """
+        Get season type string for NBA API.
+
+        Returns:
+            str: Season type string ('Regular Season', 'Playoffs', etc.)
+        """
+        # Default to Regular Season, can be extended based on feature_object
+        return "Regular Season"
+
+    # -------------------------------------------------------------------------
+    # Private Methods - Configuration (matching WebScrapNBAApi pattern)
+    # -------------------------------------------------------------------------
+
+    def _convert_season_format(self, season: int) -> str:
+        """
+        Convert season year to NBA API format.
+
+        Args:
+            season (int): Season year (e.g., 2024)
+
+        Returns:
+            str: Season in NBA API format (e.g., "2023-24")
+        """
+        return f"{season - 1}-{str(season)[-2:]}"
+
+    def _filter_teams(self, team_city_refdata: pd.DataFrame) -> pd.DataFrame:
+        """
+        Filter teams based on feature input.
+
+        Args:
+            team_city_refdata (pd.DataFrame): Team reference data
+
+        Returns:
+            pd.DataFrame: Filtered team data
+        """
+        team = self.feature_object.team
+
+        if isinstance(team, list):
+            return team_city_refdata[
+                team_city_refdata["team_abrev"].isin(team)
+            ]
+        elif isinstance(team, str):
+            if team != "all":
+                return team_city_refdata[
+                    team_city_refdata["team_abrev"] == team
+                ]
+        return team_city_refdata
+
+    def _load_config(self) -> Dict:
+        """
+        Load configuration from params.yaml.
+
+        Returns:
+            Dict: Configuration dictionary
+        """
+        ref = (
+            importlib_resources.files("basketball_reference_webscrapper")
+            / "params.yaml"
+        )
+        with importlib_resources.as_file(ref) as path:
+            with open(path, encoding="utf-8") as conf_file:
+                return yaml.safe_load(conf_file)
+
+    def _load_team_refdata(self) -> pd.DataFrame:
+        """
+        Load team reference data.
+
+        Returns:
+            pd.DataFrame: Team reference data
+        """
+        ref = (
+            importlib_resources.files("basketball_reference_webscrapper")
+            / "constants/team_city_refdata.csv"
+        )
+        with importlib_resources.as_file(ref) as path:
+            return pd.read_csv(path, sep=";")
