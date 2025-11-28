@@ -26,15 +26,23 @@ from basketball_reference_webscrapper.utils.logs import get_logger
 
 logger = get_logger("NBA_BOXSCORE_EXTRACTOR", log_level="INFO")
 
+#TODO: Improve TEAM Abrev mapping
+#TODO: Data validation checks ensuring all games for given player
+#TODO: Unify mapper method and code practices for all the script
+#TODO: Ensure code is production ready
+#TODO: Deploy new version: 0.8.0
+
 
 # NBA Teams only (excludes G-League)
 NBA_TEAMS: List[Dict] = teams.get_teams()
 
 # Team abbreviation mapping (NBA API to Basketball Reference format)
+# No need for mapping because the API accept the BKN, PHX and CHA values.
+# Mapping for now is done in the data engineering repos
 TEAM_ABBREV_MAPPING: Dict[str, str] = {
-    'BKN': 'BRK',  # Brooklyn Nets
-    'PHX': 'PHO',  # Phoenix Suns
-    'CHA': 'CHO',  # Charlotte Hornets
+    'BKN': 'BKN',  # Brooklyn Nets
+    'PHX': 'PHX',  # Phoenix Suns
+    'CHA': 'CHA',  # Charlotte Hornets
 }
 
 
