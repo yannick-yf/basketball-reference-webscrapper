@@ -5,19 +5,16 @@ This module provides web scraping functionality to extract NBA game data,
 schedules, and player attributes from Basketball Reference.
 """
 
-# Standard library
 import time
 from typing import Dict, List, Optional, Union
 from urllib.request import urlopen, Request
 
-# Third-party
 from bs4 import BeautifulSoup
 import pandas as pd
 import requests
 import importlib_resources
 import yaml
 
-# Local
 from basketball_reference_webscrapper.data_models.feature_model import FeatureIn
 from basketball_reference_webscrapper.utils.logs import get_logger
 
@@ -27,8 +24,8 @@ logger = get_logger("SCRAPER_BASKETBALL_REFERENCE", log_level="INFO")
 
 # Constants
 VALID_DATA_TYPES = ["gamelog", "schedule", "player_attributes"]
-MIN_SUPPORTED_SEASON = 1947
-DEFAULT_REQUEST_DELAY = 20  # seconds between requests
+MIN_SUPPORTED_SEASON = 2000
+DEFAULT_REQUEST_DELAY = 15  # seconds between requests
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds between retries
 
@@ -50,6 +47,10 @@ class WebScrapBasketballReference:
     This class provides web scraping functionality to extract NBA game data,
     schedules, and player attributes from Basketball Reference. It handles
     rate limiting, retries, and data transformation to produce clean DataFrames.
+
+    Note:
+        NBA API blocks cloud providers (AWS, Heroku, GCP, etc.).
+        Use this class for local development only.
 
     Attributes:
         feature_object (FeatureIn): Input feature object containing data_type,

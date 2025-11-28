@@ -148,14 +148,14 @@ class TestWebScrapBasketballReference(TestCase):
                 FeatureIn(data_type="gamelog", season="1234")
             ).fetch_basketball_reference_data()
 
-    # def test_fetch_basketball_reference_data_w_non_supported_season(self):
-    #     """
-    #     GIVEN a WebScrapBasketballReference object using a NBA season before 2000
-    #     WHEN the fetch_basketball_reference_data method is called
-    #     THEN return an error that the season used is before 2000
-    #     """
+    def test_fetch_basketball_reference_data_w_non_supported_season(self):
+        """
+        GIVEN a WebScrapBasketballReference object using a NBA season before 2000
+        WHEN the fetch_basketball_reference_data method is called
+        THEN return an error that the season used is before 2000
+        """
 
-    #     with self.assertRaises(ValueError):
-    #         WebScrapBasketballReference(
-    #             FeatureIn(data_type="gamelog", season=1998)
-    #         ).fetch_basketball_reference_data()
+        with self.assertRaises(ValueError):
+            WebScrapBasketballReference(
+                FeatureIn(data_type="gamelog", season=1998)
+            ).fetch_basketball_reference_data()
