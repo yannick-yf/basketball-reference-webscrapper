@@ -26,25 +26,9 @@ from basketball_reference_webscrapper.utils.logs import get_logger
 
 logger = get_logger("NBA_BOXSCORE_EXTRACTOR", log_level="INFO")
 
-#TODO: Improve TEAM Abrev mapping
-#TODO: Data validation checks ensuring all games for given player
-#TODO: Unify mapper method and code practices for all the script
-#TODO: Ensure code is production ready
-#TODO: Deploy new version: 0.8.0
-
 
 # NBA Teams only (excludes G-League)
 NBA_TEAMS: List[Dict] = teams.get_teams()
-
-# Team abbreviation mapping (NBA API to Basketball Reference format)
-# No need for mapping because the API accept the BKN, PHX and CHA values.
-# Mapping for now is done in the data engineering repos
-TEAM_ABBREV_MAPPING: Dict[str, str] = {
-    'BKN': 'BKN',  # Brooklyn Nets
-    'PHX': 'PHX',  # Phoenix Suns
-    'CHA': 'CHA',  # Charlotte Hornets
-}
-
 
 @dataclass
 class FailedGameRecord:
@@ -421,9 +405,7 @@ class WebScrapNBAApiBoxscore:
         Returns:
             pd.DataFrame: DataFrame with game information
         """
-        # Convert to NBA API abbreviation if needed
-        nba_abbr = self._convert_team_abbrev_to_nba(team_abbr)
-        team_id = self._get_nba_team_id(nba_abbr)
+        team_id = self._get_nba_team_id(team_abbr)
 
         if team_id is None:
             logger.warning("Could not find NBA team ID for: %s", team_abbr)
@@ -680,32 +662,6 @@ class WebScrapNBAApiBoxscore:
         """
         return self.team_mapping.get(team_abbr, {}).get('team_id')
 
-    def _convert_team_abbrev_to_nba(self, br_abbrev: str) -> str:
-        """
-        Convert Basketball Reference abbreviation to NBA API abbreviation.
-
-        Args:
-            br_abbrev (str): Basketball Reference team abbreviation
-
-        Returns:
-            str: NBA API team abbreviation
-        """
-        # Reverse mapping
-        br_to_nba = {v: k for k, v in TEAM_ABBREV_MAPPING.items()}
-        return br_to_nba.get(br_abbrev, br_abbrev)
-
-    def _convert_team_abbrev_to_br(self, nba_abbrev: str) -> str:
-        """
-        Convert NBA API abbreviation to Basketball Reference abbreviation.
-
-        Args:
-            nba_abbrev (str): NBA API team abbreviation
-
-        Returns:
-            str: Basketball Reference team abbreviation
-        """
-        return TEAM_ABBREV_MAPPING.get(nba_abbrev, nba_abbrev)
-
     # -------------------------------------------------------------------------
     # Private Methods - Column Mapping
     # -------------------------------------------------------------------------
@@ -759,10 +715,6 @@ class WebScrapNBAApiBoxscore:
 
         df = df.rename(columns=column_mapping)
 
-        # Convert team abbreviation to BR format
-        if 'tm' in df.columns:
-            df['tm'] = df['tm'].apply(self._convert_team_abbrev_to_br)
-
         return df
 
     def _map_team_boxscore_columns(
@@ -809,10 +761,6 @@ class WebScrapNBAApiBoxscore:
         }
 
         df = df.rename(columns=column_mapping)
-
-        # Convert team abbreviation to BR format
-        if 'tm' in df.columns:
-            df['tm'] = df['tm'].apply(self._convert_team_abbrev_to_br)
 
         return df
 

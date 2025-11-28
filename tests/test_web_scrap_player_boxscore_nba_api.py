@@ -12,7 +12,6 @@ from basketball_reference_webscrapper.data_models.feature_model import FeatureIn
 from basketball_reference_webscrapper.web_scrap_player_boxscore_nba_api import (
     FailedGameRecord,
     WebScrapNBAApiBoxscore,
-    TEAM_ABBREV_MAPPING,
 )
 
 
@@ -144,40 +143,6 @@ class TestWebScrapNBAApiBoxscore(TestCase):
         assert scraper._convert_season_format(2024) == "2023-24"
         assert scraper._convert_season_format(2023) == "2022-23"
         assert scraper._convert_season_format(2000) == "1999-00"
-
-    # -------------------------------------------------------------------------
-    # Team Abbreviation Conversion Tests
-    # -------------------------------------------------------------------------
-
-    def test_convert_team_abbrev_to_br(self):
-        """
-        GIVEN NBA API team abbreviations
-        WHEN _convert_team_abbrev_to_br is called
-        THEN it returns Basketball Reference format
-        """
-        scraper = WebScrapNBAApiBoxscore(
-            feature_object=self.valid_feature,
-            cache_dir=Path(self.temp_dir)
-        )
-
-        assert scraper._convert_team_abbrev_to_br('BKN') == 'BRK'
-        assert scraper._convert_team_abbrev_to_br('PHX') == 'PHO'
-        assert scraper._convert_team_abbrev_to_br('BOS') == 'BOS'  # No change
-
-    def test_convert_team_abbrev_to_nba(self):
-        """
-        GIVEN Basketball Reference team abbreviations
-        WHEN _convert_team_abbrev_to_nba is called
-        THEN it returns NBA API format
-        """
-        scraper = WebScrapNBAApiBoxscore(
-            feature_object=self.valid_feature,
-            cache_dir=Path(self.temp_dir)
-        )
-
-        assert scraper._convert_team_abbrev_to_nba('BRK') == 'BKN'
-        assert scraper._convert_team_abbrev_to_nba('PHO') == 'PHX'
-        assert scraper._convert_team_abbrev_to_nba('BOS') == 'BOS'  # No change
 
     # -------------------------------------------------------------------------
     # Validation Tests
@@ -537,7 +502,7 @@ class TestWebScrapNBAApiBoxscore(TestCase):
 
         raw_df = pd.DataFrame({
             'GAME_ID': ['0022400001'],
-            'TEAM_ABBREVIATION': ['BKN'],  # NBA format
+            'TEAM_ABBREVIATION': ['BKN'],
             'TEAM_NAME': ['Nets'],
             'PTS': [110],
             'AST': [25]
@@ -547,7 +512,7 @@ class TestWebScrapNBAApiBoxscore(TestCase):
 
         assert 'game_id' in mapped_df.columns
         assert 'tm' in mapped_df.columns
-        assert mapped_df['tm'].iloc[0] == 'BRK'  # Converted to BR format
+        assert mapped_df['tm'].iloc[0] == 'BKN'  # No conversion, stays as BKN
 
     # -------------------------------------------------------------------------
     # Integration Tests (make actual API calls)
