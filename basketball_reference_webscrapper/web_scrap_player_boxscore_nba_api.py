@@ -627,7 +627,7 @@ class WebScrapNBAApiBoxscore:
         try:
             self._request_count += 1
 
-            boxscore = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
+            boxscore = boxscoretraditionalv3.BoxScoreTraditionalV3(game_id=game_id)
             time.sleep(self.base_delay)
 
             player_stats = boxscore.get_data_frames()[0]
@@ -658,12 +658,12 @@ class WebScrapNBAApiBoxscore:
         The nba_api library manages its own internal HTTP session.
         To truly reset connections, we must reload the modules themselves.
         """
-        import nba_api.stats.endpoints.boxscoretraditionalv2
+        import nba_api.stats.endpoints.boxscoretraditionalv3
         import nba_api.stats.endpoints.leaguegamefinder
         import nba_api.stats.library.http
 
         importlib.reload(nba_api.stats.library.http)
-        importlib.reload(nba_api.stats.endpoints.boxscoretraditionalv2)
+        importlib.reload(nba_api.stats.endpoints.boxscoretraditionalv3)
         importlib.reload(nba_api.stats.endpoints.leaguegamefinder)
 
         gc.collect()

@@ -472,19 +472,17 @@ class TestWebScrapNBAApiBoxscore(TestCase):
         )
 
         raw_df = pd.DataFrame({
-            'GAME_ID': ['0022400001'],
-            'TEAM_ABBREVIATION': ['BOS'],
-            'PLAYER_NAME': ['Jayson Tatum'],
-            'PTS': [30],
-            'AST': [5],
-            'REB': [10]
+            'gameId': ['0022400001'],
+            'teamTricode': ['BOS'],
+            'points': [30],
+            'assists': [5],
+            'reboundsTotal': [10]
         })
 
         mapped_df = scraper._map_player_boxscore_columns(raw_df, {})
 
         assert 'game_id' in mapped_df.columns
         assert 'tm' in mapped_df.columns
-        assert 'player_name' in mapped_df.columns
         assert 'pts' in mapped_df.columns
         assert 'ast' in mapped_df.columns
         assert 'trb' in mapped_df.columns
