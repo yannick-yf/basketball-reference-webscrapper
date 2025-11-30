@@ -201,6 +201,7 @@ gamelog_nba_api:
     - pf_opp
   list_columns_to_select:
     - id_season
+    - game_id
     - game_nb
     - game_date
     - extdom
@@ -243,6 +244,7 @@ schedule_nba_api:
     - streak_w_l
   list_columns_to_select:
     - id_season
+    - game_id
     - tm
     - game_date
     - time_start

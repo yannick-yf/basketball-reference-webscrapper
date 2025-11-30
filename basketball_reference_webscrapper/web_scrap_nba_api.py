@@ -389,6 +389,7 @@ class WebScrapNBAApi:
         # NBA API columns to Basketball Reference mapping
         column_mapping = {
             'GAME_DATE': 'game_date',
+            'GAME_ID': 'game_id',
             'MATCHUP': 'matchup_raw',
             'WL': 'results',
             'PTS': 'pts_tm',
@@ -452,6 +453,7 @@ class WebScrapNBAApi:
         """
         # NBA API columns to Basketball Reference mapping
         column_mapping = {
+            'GAME_ID': 'game_id',
             'GAME_DATE': 'game_date',
             'MATCHUP': 'matchup_raw',
             'WL': 'w_l',
