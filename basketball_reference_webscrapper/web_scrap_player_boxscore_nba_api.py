@@ -26,6 +26,10 @@ from nba_api.stats.static import teams
 # Local
 from basketball_reference_webscrapper.data_models.feature_model import FeatureIn
 from basketball_reference_webscrapper.utils.logs import get_logger
+from basketball_reference_webscrapper.utils.team_utils import (
+    is_team_valid_for_season,
+    get_excluded_teams_for_season
+)
 
 __all__ = ['WebScrapNBAApiBoxscore', 'FailedGameRecord']
 
@@ -119,6 +123,7 @@ class WebScrapNBAApiBoxscore:
     - Game ID deduplication to avoid redundant API calls
     - Periodic session reset to avoid connection exhaustion
     - Caching system for failed games with retry capability
+    - Season-based team validity filtering to handle historical name changes
 
     Follows the same interface pattern as WebScrapNBAApi for consistency.
 
@@ -863,26 +868,52 @@ class WebScrapNBAApiBoxscore:
 
     def _filter_teams(self, team_city_refdata: pd.DataFrame) -> pd.DataFrame:
         """
-        Filter teams based on feature input.
+        Filter teams based on feature input and season validity.
+
+        This method filters teams in two stages:
+        1. Based on user input (specific team, list of teams, or 'all')
+        2. Based on season validity (excludes teams not active in requested season)
 
         Args:
             team_city_refdata (pd.DataFrame): Full team reference data.
 
         Returns:
-            pd.DataFrame: Filtered team data based on the team parameter.
+            pd.DataFrame: Filtered team data based on the team parameter
+                and season validity.
         """
         team = self.feature_object.team
+        season = self.feature_object.season
 
+        # First filter: based on user input
         if isinstance(team, list):
-            return team_city_refdata[
+            filtered_df = team_city_refdata[
                 team_city_refdata["team_abrev"].isin(team)
             ]
         elif isinstance(team, str) and team != "all":
-            return team_city_refdata[
+            filtered_df = team_city_refdata[
                 team_city_refdata["team_abrev"] == team
             ]
+        else:
+            filtered_df = team_city_refdata
 
-        return team_city_refdata
+        # Second filter: based on season validity
+        # This prevents duplicate fetching for teams with historical name changes
+        all_teams = list(filtered_df["team_abrev"])
+        valid_teams = [
+            team_abbr for team_abbr in all_teams
+            if is_team_valid_for_season(team_abbr, season)
+        ]
+
+        # Log any teams filtered out due to season validity
+        excluded_teams = get_excluded_teams_for_season(all_teams, season)
+        if excluded_teams:
+            logger.info(
+                "Excluded teams not valid for season %d: %s",
+                season,
+                excluded_teams
+            )
+
+        return filtered_df[filtered_df["team_abrev"].isin(valid_teams)]
 
     def _load_config(self) -> Dict:
         """

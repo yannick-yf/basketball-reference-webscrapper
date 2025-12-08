@@ -1,0 +1,139 @@
+# Team Season Validity Configuration
+# Maps NBA team abbreviations to their valid season ranges.
+# Used to prevent duplicate data from historical team name changes.
+#
+# Format:
+#   TEAM_ABBREV:
+#     start_season: YYYY  # First valid season (inclusive)
+#     end_season: YYYY    # Last valid season (inclusive), null = current
+#
+# Season notation: 2024 means the 2023-24 NBA season
+
+team_season_validity:
+  # Charlotte franchise (team_id: 1610612766)
+  # Charlotte Hornets rebranded from Bobcats in 2014-15 season
+  CHO:
+    start_season: 2015
+    end_season: null
+  CHA:
+    start_season: 2005
+    end_season: 2014
+
+  # Brooklyn Nets (team_id: 1610612751)
+  # Moved from New Jersey to Brooklyn in 2012-13 season
+  BRK:
+    start_season: 2013
+    end_season: null
+  NJN:
+    start_season: 2000
+    end_season: 2012
+
+  # Oklahoma City Thunder (team_id: 1610612760)
+  # Relocated from Seattle in 2008-09 season
+  OKC:
+    start_season: 2009
+    end_season: null
+  SEA:
+    start_season: 2000
+    end_season: 2008
+
+  # Memphis Grizzlies (team_id: 1610612763)
+  # Relocated from Vancouver in 2001-02 season
+  MEM:
+    start_season: 2002
+    end_season: null
+  VAN:
+    start_season: 2000
+    end_season: 2001
+
+  # New Orleans Pelicans (team_id: 1610612740)
+  # Rebranded from Hornets in 2013-14 season
+  NOP:
+    start_season: 2014
+    end_season: null
+  NOH:
+    start_season: 2003
+    end_season: 2013
+  NOK:
+    start_season: 2006
+    end_season: 2007  # Temporary during Katrina relocation
+
+  # Washington Wizards (team_id: 1610612764)
+  # Rebranded from Bullets in 1997-98 (before MIN_SUPPORTED_SEASON)
+  WAS:
+    start_season: 2000
+    end_season: null
+
+  # Teams with no name changes since 2000 (always valid)
+  ATL:
+    start_season: 2000
+    end_season: null
+  BOS:
+    start_season: 2000
+    end_season: null
+  CHI:
+    start_season: 2000
+    end_season: null
+  CLE:
+    start_season: 2000
+    end_season: null
+  DAL:
+    start_season: 2000
+    end_season: null
+  DEN:
+    start_season: 2000
+    end_season: null
+  DET:
+    start_season: 2000
+    end_season: null
+  GSW:
+    start_season: 2000
+    end_season: null
+  HOU:
+    start_season: 2000
+    end_season: null
+  IND:
+    start_season: 2000
+    end_season: null
+  LAC:
+    start_season: 2000
+    end_season: null
+  LAL:
+    start_season: 2000
+    end_season: null
+  MIA:
+    start_season: 2000
+    end_season: null
+  MIL:
+    start_season: 2000
+    end_season: null
+  MIN:
+    start_season: 2000
+    end_season: null
+  NYK:
+    start_season: 2000
+    end_season: null
+  ORL:
+    start_season: 2000
+    end_season: null
+  PHI:
+    start_season: 2000
+    end_season: null
+  PHO:
+    start_season: 2000
+    end_season: null
+  POR:
+    start_season: 2000
+    end_season: null
+  SAC:
+    start_season: 2000
+    end_season: null
+  SAS:
+    start_season: 2000
+    end_season: null
+  TOR:
+    start_season: 2000
+    end_season: null
+  UTA:
+    start_season: 2000
+    end_season: null
