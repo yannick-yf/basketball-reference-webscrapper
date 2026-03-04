@@ -34,7 +34,7 @@ logger = get_logger("SCRAPER_NBA_API", log_level="INFO")
 # Constants
 VALID_DATA_TYPES = ["gamelog", "schedule", "schedule_non_played_games"]
 MIN_SUPPORTED_SEASON = 2000
-DEFAULT_REQUEST_DELAY = 0.4  # seconds between requests
+DEFAULT_REQUEST_DELAY = 3  # seconds between requests
 
 # NBA Team ID mapping (current as of 2024-25 season)
 NBA_TEAM_MAPPING: Dict[str, Dict] = {
